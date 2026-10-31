@@ -1,0 +1,25 @@
+name = "fortwenty"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "shisha-store-db"
+database_id = "54bc5359-dbc4-4047-97aa-deec768b69a2"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Non-secret settings. Secrets (ADMIN_TOKEN, CALLBACK_SECRET, DARAJA_* keys, AT_API_KEY)
+# go in .dev.vars locally and in `wrangler secret put` for production.
+[vars]
+PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval exist, then "daraja"
+SMS_MODE = "mock"             # "mock" logs messages; "at" sends through Africa's Talking
+DARAJA_ENV = "sandbox"
+ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is added when provided
+RIDER_CUT_PCT = "10"          # PLACEHOLDER: real rider cut not yet decided
+DELIVERY_FEE_KES = "0"        # PLACEHOLDER: delivery fee not yet decided
+PUBLIC_URL = "http://localhost:8787"
