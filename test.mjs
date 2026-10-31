@@ -82,5 +82,44 @@ rs = await riders();
 check('rider owed 10% of 1200 = 120 exactly once', rs.find((r) => r.id === rider1Order.rider_id).owed_kes === 120, JSON.stringify(rs));
 check('queued order assigned after delivery', (await status(q.order_id)) === 'assigned');
 
+// ---- Airtel Money, map pin, providers (added in step 3/4) ----
+const cfg = await get('/api/config');
+check('config lists both providers', Array.isArray(cfg.providers) && cfg.providers.includes('airtel') && cfg.providers.includes('mpesa'), JSON.stringify(cfg));
+check('unknown provider rejected', (await order({ phone: '0733000001', provider: 'paypal' })).status === 400);
+check('pin outside Nakuru rejected', (await order({ phone: '0733000002', lat: -1.286, lng: 36.817 })).status === 400);
+check('junk pin rejected', (await order({ phone: '0733000003', lat: 'abc', lng: 36.08 })).status === 400);
+check('wrong airtel callback secret rejected', (await post('/api/airtel/callback/wrong', {})).status === 403);
+
+// Free both riders first so the Airtel order gets one straight away (deliver everything outstanding)
+for (let pass2 = 0; pass2 < 3; pass2++) {
+  for (const m of await sms()) { const t = (m.body.match(/\/d\/([a-z0-9]+)/) || [])[1]; if (t) await post('/api/deliver/' + t); }
+}
+const air = await (await order({ phone: '0733000004', provider: 'airtel', product_id: 2, qty: 1, lat: -0.3031, lng: 36.08, address: 'Airtel test, Nakuru' })).json();
+check('airtel order starts awaiting payment', (await status(air.order_id)) === 'awaiting_payment', JSON.stringify(air));
+const airRow = (await orders()).find((o) => o.id === air.order_id);
+check('airtel order stores provider and pin', airRow && airRow.provider === 'airtel' && Math.abs(airRow.lat + 0.3031) < 1e-6 && Math.abs(airRow.lng - 36.08) < 1e-6, JSON.stringify(airRow));
+// Airtel-style callback straight to the real endpoint: first one with TA (ambiguous) changes nothing
+const txId = 'mock_' + air.order_id;
+await post('/api/airtel/callback/dev-callback-secret', { transaction: { id: txId, status_code: 'TA' } });
+check('airtel TA leaves order waiting', (await status(air.order_id)) === 'awaiting_payment');
+await pay(air.order_id, { result: 0 });
+check('airtel TS marks paid and queues/assigns', ['paid', 'assigned'].includes(await status(air.order_id)));
+const dupAir = await post('/api/airtel/callback/dev-callback-secret', { transaction: { id: txId, status_code: 'TS' } }).then((r) => r.json());
+check('airtel duplicate callback does nothing', (await status(air.order_id)) !== 'awaiting_payment' && dupAir.ok === true);
+check('airtel callback for unknown id harmless', (await post('/api/airtel/callback/dev-callback-secret', { transaction: { id: 'nope', status_code: 'TS' } })).status === 200);
+
+const airFail = await (await order({ phone: '0733000005', provider: 'airtel' })).json();
+await pay(airFail.order_id, { result: 1032 });
+check('airtel TF -> payment_failed', (await status(airFail.order_id)) === 'payment_failed');
+
+// An M-Pesa order is untouched by an Airtel-shaped callback
+const mp = await (await order({ phone: '0733000006' })).json();
+await post('/api/airtel/callback/dev-callback-secret', { transaction: { id: 'mock_' + mp.order_id, status_code: 'TS' } });
+check('airtel callback cannot pay an M-Pesa order', (await status(mp.order_id)) === 'awaiting_payment');
+
+// The rider SMS carries the map link when there is a pin
+const smsAll = await sms();
+check('rider SMS has map link', smsAll.some((m) => /maps\.google\.com\/\?q=-0\.303100,36\.080000/.test(m.body)), 'no map link in sms_log');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

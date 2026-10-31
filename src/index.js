@@ -16,6 +16,14 @@ export function normalizePhone(raw) {
   return /^254[17]\d{8}$/.test(p) ? p : null;
 }
 
+const mapLink = (lat, lng) => `https://maps.google.com/?q=${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+
+// Providers the store accepts right now. Airtel stays off in production until its account is approved.
+const providersOn = (env) => String(env.ENABLED_PROVIDERS || 'mpesa').split(',').map((x) => x.trim()).filter(Boolean);
+
+// Placeholder service area around Nakuru town (roughly 25 km each way). Real delivery rules come later.
+const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
+
 const alertOwners = (env, msg) => Promise.all(String(env.ALERT_PHONES || '').split(',').filter(Boolean).map((n) => sendSms(env, n.trim(), msg)));
 
 async function assignRider(env, orderId) {
@@ -33,8 +41,8 @@ async function assignRider(env, orderId) {
       await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(rider.id).run();
       return false;
     }
-    const o = await env.DB.prepare('SELECT address, phone, delivery_token, total_kes FROM orders WHERE id = ?').bind(orderId).first();
-    await sendSms(env, rider.phone, `Delivery: ${o.address}. Customer ${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`);
+    const o = await env.DB.prepare('SELECT address, phone, delivery_token, total_kes, lat, lng FROM orders WHERE id = ?').bind(orderId).first();
+    await sendSms(env, rider.phone, `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Customer ${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`);
     return true;
   }
   return false;
@@ -69,12 +77,43 @@ export async function processCallback(env, body) {
   return { ok: true, reason: 'paid' };
 }
 
+// Handles an Airtel Money callback. Idempotent. Airtel's body carries the transaction id and a status code:
+// TS success, TF failed, TA ambiguous. We never trust the callback alone: success is re-checked with Airtel first.
+export async function processAirtelCallback(env, body) {
+  const t = body && body.transaction;
+  if (!t || !t.id) return { ok: false, reason: 'bad_body' };
+  const order = await env.DB.prepare("SELECT * FROM orders WHERE checkout_request_id = ? AND provider = 'airtel'").bind(String(t.id)).first();
+  if (!order) return { ok: false, reason: 'unknown_order' };
+  if (order.status !== 'awaiting_payment') return { ok: true, reason: 'already_processed' };
+  if (t.status_code === 'TF') {
+    await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ? AND status = 'awaiting_payment'").bind(order.id).run();
+    return { ok: true, reason: 'payment_failed' };
+  }
+  if (t.status_code !== 'TS') return { ok: true, reason: 'pending' }; // the 5-minute job asks Airtel again
+  let receipt = t.airtel_money_id || null;
+  if (env.PAYMENTS_MODE !== 'mock') {
+    const v = await queryStatus(env, order);
+    if (!v || v.resultCode !== 0) return { ok: true, reason: 'unverified' };
+    receipt = receipt || v.receipt;
+  }
+  await markPaid(env, order, receipt);
+  return { ok: true, reason: 'paid' };
+}
+
 async function createOrder(env, req) {
   let b;
   try { b = await req.json(); } catch { return json({ error: 'Invalid request' }, 400); }
   if (b.age_confirmed !== true) return json({ error: 'You must confirm you are 18 or older.' }, 400);
   const phone = normalizePhone(b.phone);
-  if (!phone) return json({ error: 'Enter a valid Safaricom number, like 0712345678.' }, 400);
+  if (!phone) return json({ error: 'Enter a valid Kenyan phone number, like 0712345678.' }, 400);
+  const provider = String(b.provider || 'mpesa');
+  if (!providersOn(env).includes(provider)) return json({ error: 'That payment method is not available right now.' }, 400);
+  let lat = null, lng = null;
+  if (b.lat != null || b.lng != null) {
+    lat = Number(b.lat); lng = Number(b.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'The map pin is not valid. Please pin again.' }, 400);
+    if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our Nakuru delivery area.' }, 400);
+  }
   const address = String(b.address || '').trim();
   if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters).' }, 400);
   const qty = Number(b.qty);
@@ -87,13 +126,13 @@ async function createOrder(env, req) {
   // Price comes from the database, never from the browser.
   const total = product.price_kes * qty + Number(env.DELIVERY_FEE_KES || 0);
   const id = rid(10);
-  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now()).run();
+  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng).run();
   try {
-    const { checkoutRequestId } = await stkPush(env, { orderId: id, phone, amount: total });
+    const { checkoutRequestId } = await stkPush(env, { orderId: id, phone, amount: total, provider });
     await env.DB.prepare('UPDATE orders SET checkout_request_id = ? WHERE id = ?').bind(checkoutRequestId, id).run();
   } catch (e) {
     await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ?").bind(id).run();
-    return json({ error: 'Could not start the M-Pesa prompt. Nothing was charged. Please try again.' }, 502);
+    return json({ error: 'Could not start the payment prompt. Nothing was charged. Please try again.' }, 502);
   }
   return json({ order_id: id, total_kes: total });
 }
@@ -107,7 +146,7 @@ async function reconcile(env) {
       continue;
     }
     try {
-      const r = await queryStatus(env, o.checkout_request_id);
+      const r = await queryStatus(env, o);
       if (!r) continue;
       if (r.resultCode === 0) await markPaid(env, o, r.receipt);
       else await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ? AND status = 'awaiting_payment'").bind(o.id).run();
@@ -121,7 +160,7 @@ async function reconcile(env) {
 const adminOk = (req, env) => env.ADMIN_TOKEN && req.headers.get('authorization') === 'Bearer ' + env.ADMIN_TOKEN;
 
 const deliveryPage = (o, token) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery</title>
-<body style="font-family:system-ui;max-width:420px;margin:24px auto;padding:0 16px"><h2>Delivery</h2><p><b>Address:</b> ${o.address.replace(/</g, '&lt;')}</p><p><b>Customer:</b> ${o.phone}</p><p><b>Amount paid:</b> KSh ${o.total_kes}</p>
+<body style="font-family:system-ui;max-width:420px;margin:24px auto;padding:0 16px"><h2>Delivery</h2><p><b>Address:</b> ${o.address.replace(/</g, '&lt;')}</p>${o.lat != null ? `<p><a href="${mapLink(o.lat, o.lng)}" style="font-size:18px">Open the pin in Maps</a></p>` : ''}<p><b>Customer:</b> ${o.phone}</p><p><b>Amount paid:</b> KSh ${o.total_kes}</p>
 <button id="b" style="font-size:18px;padding:14px 20px;width:100%">Mark delivered</button><p id="m"></p>
 <script>b.onclick=async()=>{b.disabled=true;const r=await fetch('/api/deliver/${token}',{method:'POST'});m.textContent=r.ok?'Done. Thank you.':'Could not save. Try again.';if(!r.ok)b.disabled=false};</script>`;
 
@@ -136,7 +175,7 @@ export default {
         const r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
         return json({ ok: !!r, ts: r && r.ts });
       }
-      if (path === '/api/config') return json({ payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0) });
+      if (path === '/api/config') return json({ payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0), providers: providersOn(env), area: AREA });
       if (path === '/api/flavors' && method === 'GET') {
         const fl = (await env.DB.prepare('SELECT id, name, blurb, color FROM flavors WHERE active = 1 ORDER BY sort, id').all()).results;
         const pr = (await env.DB.prepare('SELECT id, flavor_id, size, price_kes FROM products WHERE active = 1 AND flavor_id IS NOT NULL ORDER BY price_kes').all()).results;
@@ -161,6 +200,13 @@ export default {
         return json({ ResultCode: 0, ResultDesc: 'Accepted' });
       }
 
+      m = path.match(/^\/api\/airtel\/callback\/(.+)$/);
+      if (m && method === 'POST') {
+        if (!env.CALLBACK_SECRET || m[1] !== env.CALLBACK_SECRET) return json({ error: 'Forbidden' }, 403);
+        await processAirtelCallback(env, await req.json().catch(() => null));
+        return json({ ok: true });
+      }
+
       // Demo only: simulate the customer's phone while PAYMENTS_MODE is mock.
       m = path.match(/^\/api\/demo\/pay\/([a-z0-9]+)$/);
       if (m && method === 'POST' && env.PAYMENTS_MODE === 'mock') {
@@ -168,13 +214,14 @@ export default {
         if (!o) return json({ error: 'Not found' }, 404);
         const b = await req.json().catch(() => ({}));
         const result = Number(b.result || 0);
+        if (o.provider === 'airtel') return json(await processAirtelCallback(env, { transaction: { id: o.checkout_request_id, status_code: result === 0 ? 'TS' : 'TF', message: 'mock' } }));
         const body = { Body: { stkCallback: { CheckoutRequestID: o.checkout_request_id, ResultCode: result, CallbackMetadata: result === 0 ? { Item: [{ Name: 'Amount', Value: b.amount !== undefined ? Number(b.amount) : o.total_kes }, { Name: 'MpesaReceiptNumber', Value: 'MOCK' + rid(7).toUpperCase() }] } : undefined } } };
         return json(await processCallback(env, body));
       }
 
       m = path.match(/^\/d\/([a-z0-9]+)$/);
       if (m && method === 'GET') {
-        const o = await env.DB.prepare('SELECT address, phone, total_kes, status FROM orders WHERE delivery_token = ?').bind(m[1]).first();
+        const o = await env.DB.prepare('SELECT address, phone, total_kes, status, lat, lng FROM orders WHERE delivery_token = ?').bind(m[1]).first();
         if (!o) return html('<p>Link not found.</p>', 404);
         return html(o.status === 'delivered' ? '<p>Already marked delivered.</p>' : deliveryPage(o, m[1]));
       }
@@ -197,7 +244,7 @@ export default {
 
       if (path.startsWith('/api/admin/')) {
         if (!adminOk(req, env)) return json({ error: 'Forbidden' }, 403);
-        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT id, status, total_kes, phone, address, rider_id, mpesa_receipt, created_at FROM orders ORDER BY created_at DESC LIMIT 100').all()).results);
+        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT id, status, total_kes, phone, address, rider_id, mpesa_receipt, created_at, provider, lat, lng FROM orders ORDER BY created_at DESC LIMIT 100').all()).results);
         if (path === '/api/admin/riders') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.busy, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results);
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/settle$/);
         if (m && method === 'POST') {

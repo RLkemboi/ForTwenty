@@ -1,16 +1,26 @@
 // SMS adapter. SMS_MODE=mock records messages in sms_log; SMS_MODE=at sends through Africa's Talking.
-// The "at" path is written but NOT yet tested: it needs real credentials.
+// AT_ENV=sandbox uses AT's test servers (nothing reaches a real phone); anything else is live.
+// The "at" path is written but NOT yet tested against the real service: it needs credentials.
 export async function sendSms(env, to, body) {
   const now = Date.now();
   let status = 'mock';
   if (env.SMS_MODE === 'at') {
     try {
-      const res = await fetch('https://api.africastalking.com/version1/messaging', {
+      const host = env.AT_ENV === 'sandbox' ? 'api.sandbox.africastalking.com' : 'api.africastalking.com';
+      const form = { username: env.AT_USERNAME, to: '+' + to, message: body };
+      if (env.AT_SENDER_ID) form.from = env.AT_SENDER_ID; // only after the sender ID is registered and approved
+      const res = await fetch('https://' + host + '/version1/messaging', {
         method: 'POST',
         headers: { apiKey: env.AT_API_KEY, Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username: env.AT_USERNAME, to: '+' + to, message: body }),
+        body: new URLSearchParams(form),
       });
-      status = res.ok ? 'sent' : 'failed:' + res.status;
+      // AT answers 201 even when a single recipient is rejected, so read the per-recipient status.
+      // 100 Processed, 101 Sent, 102 Queued are fine; anything else is a failure.
+      const data = await res.json().catch(() => null);
+      const r = data && data.SMSMessageData && data.SMSMessageData.Recipients && data.SMSMessageData.Recipients[0];
+      if (!res.ok) status = 'failed:' + res.status;
+      else if (r && [100, 101, 102].includes(Number(r.statusCode))) status = 'sent';
+      else status = 'failed:' + ((r && r.status) || 'no_recipient');
     } catch (e) {
       status = 'failed:network';
     }

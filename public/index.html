@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Order</title>
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <style>
   * { box-sizing: border-box; }
   html { scroll-snap-type: y proximity; scroll-padding-top: 56px; }
@@ -65,6 +66,16 @@
   .stepper button { width: 48px; height: 48px; border-radius: 10px; border: 1px solid #bbb; background: #fff; font-size: 24px; cursor: pointer; }
   .stepper input { width: 72px; text-align: center; font-weight: 700; -moz-appearance: textfield; }
   .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  fieldset.provs { border: 0; padding: 0; margin: 14px 0 0; }
+  fieldset.provs legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+  .provs .opts { display: flex; gap: 8px; }
+  .provs label.opt { flex: 1; margin: 0; padding: 12px; border: 2px solid #ccc; border-radius: 10px; text-align: center; font-weight: 600; cursor: pointer; }
+  .provs label.opt:has(input:checked) { border-color: #1a1a1a; background: #f1f1ee; }
+  .provs label.opt input { position: absolute; opacity: 0; pointer-events: none; }
+  .provs label.opt:has(input:focus-visible) { outline: 3px solid #1a73e8; outline-offset: 2px; }
+  #map { height: 220px; border-radius: 10px; border: 1px solid #ccc; margin-top: 8px; z-index: 0; }
+  .locbtn { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #1a1a1a; border-radius: 10px; background: #fff; cursor: pointer; margin-top: 4px; }
+  #mapfail { display: none; }
   #msg { margin-top: 14px; min-height: 24px; }
   .err { color: #b00020; }
   .box { border: 1px solid #ccc; border-radius: 8px; padding: 14px; margin-top: 16px; }
@@ -90,7 +101,7 @@
     <ol>
       <li>Pick a flavor and tap Order</li>
       <li>Enter your phone number and where you are</li>
-      <li>Approve the M-Pesa prompt on your phone</li>
+      <li>Approve the payment prompt on your phone</li>
       <li>A rider brings it to you</li>
     </ol>
   </div>
@@ -123,7 +134,14 @@
         <input id="q" type="number" min="1" max="10" value="1" inputmode="numeric">
         <button type="button" id="qp" aria-label="One more">+</button>
       </div>
-      <label for="ph">M-Pesa phone number</label>
+      <fieldset class="provs" id="provs">
+        <legend>Pay with</legend>
+        <div class="opts">
+          <label class="opt" id="o-mpesa"><input type="radio" name="prov" value="mpesa" checked>M-Pesa</label>
+          <label class="opt" id="o-airtel"><input type="radio" name="prov" value="airtel">Airtel Money</label>
+        </div>
+      </fieldset>
+      <label for="ph">Phone number to pay with</label>
       <div class="phone">
         <input id="cc" type="tel" value="+254" maxlength="5" inputmode="tel" aria-label="Country code" autocomplete="off">
         <input id="ph" type="tel" inputmode="numeric" placeholder="712 345 678" autocomplete="tel-national" aria-label="Phone number after the country code">
@@ -131,6 +149,11 @@
       <p class="hint" id="phhint" aria-live="polite">Type it with or without the first 0, both work.</p>
       <label for="ad">Delivery spot</label>
       <input id="ad" type="text" placeholder="Building, street, landmark" autocomplete="street-address">
+      <label id="maplabel" for="loc">Pin your spot on the map</label>
+      <button class="locbtn" id="loc" type="button">Use my current location</button>
+      <div id="map" role="application" aria-label="Map. Tap to drop a pin where the rider should come."></div>
+      <p class="hint" id="pinhint" aria-live="polite">Or tap the map to drop a pin. You can drag the pin to fine tune it.</p>
+      <p class="hint err" id="mapfail">The map could not load. Type your delivery spot above and we will still deliver.</p>
       <div class="row2"><input id="age" type="checkbox"><label for="age" style="margin:0;font-weight:400">I confirm I am 18 years or older.</label></div>
       <p id="total" style="margin:14px 0 0;font-weight:600"></p>
       <button class="pay" id="go" type="submit">Pay with M-Pesa</button>
@@ -144,6 +167,7 @@
   </div>
 </dialog>
 
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const KES = (n) => 'KSh ' + n;
@@ -242,8 +266,10 @@ function openOrder(flavor, size) {
   $('dsub').textContent = `${flavor.name}, ${size.size === 'packet' ? 'packet' : 'sample'} (${KES(size.price_kes)} each)`;
   $('msg').textContent = ''; $('msg').className = ''; $('demo').style.display = 'none'; $('go').disabled = false;
   $('q').value = 1; phoneHint();
+  setupProviders();
   updateTotal();
   $('dlg').showModal();
+  showMap();
 }
 $('close').onclick = () => $('dlg').close();
 $('dlg').addEventListener('close', () => clearInterval(timer));
@@ -267,8 +293,8 @@ function phoneHint() {
   h.className = 'hint';
   if (!num) { h.textContent = 'Type it with or without the first 0, both work.'; return; }
   const r = resolvePhone(cc, num);
-  if (r) { h.textContent = `We will send the M-Pesa prompt to +${r.slice(0, 3)} ${r.slice(3, 6)} ${r.slice(6, 9)} ${r.slice(9)}`; return; }
-  if (cc && cc !== '+254' && cc !== '254') { h.className = 'hint err'; h.textContent = 'M-Pesa prompts only work for Kenyan numbers, so the code must be +254.'; return; }
+  if (r) { h.textContent = `We will send the ${PROV[provider()].name} prompt to +${r.slice(0, 3)} ${r.slice(3, 6)} ${r.slice(6, 9)} ${r.slice(9)}`; return; }
+  if (cc && cc !== '+254' && cc !== '254') { h.className = 'hint err'; h.textContent = 'Payment prompts only work for Kenyan numbers, so the code must be +254.'; return; }
   const digits = num.replace(/\D/g, '').replace(/^0/, '').length;
   h.textContent = digits < 9 ? 'Keep typing: 9 digits after the code.' : '';
   if (digits > 9) { h.className = 'hint err'; h.textContent = 'That is too many digits. Check the number.'; }
@@ -276,13 +302,65 @@ function phoneHint() {
 $('cc').oninput = $('ph').oninput = phoneHint;
 
 const STATUS_TEXT = {
-  awaiting_payment: 'Check your phone and enter your M-Pesa PIN.',
+  awaiting_payment: 'Check your phone and enter your PIN.',
   paid: 'Payment received. Finding a rider for you.',
   assigned: 'Payment received. A rider is on the way.',
   delivered: 'Delivered. Thank you!',
   payment_failed: 'The payment did not go through. Nothing was charged. You can try again.',
   amount_mismatch: 'We received a different amount than expected. We will contact you by SMS.',
   expired: 'The payment prompt expired. Nothing was charged. You can try again.',
+};
+
+const PROV = { mpesa: { name: 'M-Pesa' }, airtel: { name: 'Airtel Money' } };
+const provider = () => (document.querySelector('input[name=prov]:checked') || { value: 'mpesa' }).value;
+function setupProviders() {
+  const on = (config.providers && config.providers.length ? config.providers : ['mpesa']);
+  for (const k of Object.keys(PROV)) $('o-' + k).style.display = on.includes(k) ? '' : 'none';
+  $('provs').style.display = on.length > 1 ? '' : 'none';
+  if (!on.includes(provider())) document.querySelector(`input[name=prov][value=${on[0]}]`).checked = true;
+  payLabel();
+}
+function payLabel() { $('go').textContent = 'Pay with ' + PROV[provider()].name; phoneHint(); }
+document.querySelectorAll('input[name=prov]').forEach((r) => { r.onchange = payLabel; });
+
+/* ---------- Map pin ---------- */
+let map = null, marker = null, pin = null;
+const mapReady = () => typeof L !== 'undefined';
+function pinText() {
+  $('pinhint').className = 'hint';
+  $('pinhint').textContent = pin ? `Pin set (${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}). Drag it to fine tune.` : 'Or tap the map to drop a pin. You can drag the pin to fine tune it.';
+}
+function inArea(lat, lng) { const a = config.area; return !a || (lat >= a.latMin && lat <= a.latMax && lng >= a.lngMin && lng <= a.lngMax); }
+function setPin(lat, lng, zoom) {
+  if (!inArea(lat, lng)) { $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; return false; }
+  pin = { lat, lng };
+  if (/^Please pin/.test($('msg').textContent)) { $('msg').textContent = ''; $('msg').className = ''; }
+  if (!marker) {
+    marker = L.marker([lat, lng], { draggable: true, keyboard: true, title: 'Delivery pin' }).addTo(map);
+    marker.on('dragend', () => { const p = marker.getLatLng(); if (inArea(p.lat, p.lng)) { pin = { lat: p.lat, lng: p.lng }; pinText(); } else { marker.setLatLng([pin.lat, pin.lng]); $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; } });
+  } else marker.setLatLng([lat, lng]);
+  if (zoom) map.setView([lat, lng], zoom);
+  pinText();
+  return true;
+}
+function showMap() {
+  if (!mapReady()) { $('map').style.display = 'none'; $('loc').style.display = 'none'; $('maplabel').style.display = 'none'; $('pinhint').style.display = 'none'; $('mapfail').style.display = 'block'; return; }
+  if (!map) {
+    L.Icon.Default.imagePath = '/vendor/leaflet/images/';
+    map = L.map('map', { center: [-0.3031, 36.08], zoom: 14, zoomControl: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+    map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+  }
+  setTimeout(() => { map.invalidateSize(); if (pin) map.setView([pin.lat, pin.lng], map.getZoom()); }, 60);
+}
+$('loc').onclick = () => {
+  if (!mapReady()) return;
+  if (!navigator.geolocation) { $('pinhint').className = 'hint err'; $('pinhint').textContent = 'This phone cannot share its location. Tap the map instead.'; return; }
+  $('pinhint').className = 'hint'; $('pinhint').textContent = 'Finding you...';
+  navigator.geolocation.getCurrentPosition(
+    (p) => { setPin(p.coords.latitude, p.coords.longitude, 17); },
+    (err) => { $('pinhint').className = 'hint err'; $('pinhint').textContent = err.code === 1 ? 'Location is blocked for this site. Tap the map to pin your spot instead.' : 'Could not get your location. Tap the map to pin your spot instead.'; },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 };
 
 async function poll() {
@@ -297,10 +375,11 @@ async function poll() {
 
 $('f').onsubmit = async (e) => {
   e.preventDefault();
-  $('go').disabled = true; $('msg').className = ''; $('msg').textContent = 'Starting M-Pesa prompt...';
+  if (mapReady() && !pin) { $('msg').className = 'err'; $('msg').textContent = 'Please pin your spot on the map, or tap "Use my current location".'; return; }
+  $('go').disabled = true; $('msg').className = ''; $('msg').textContent = 'Sending the ' + PROV[provider()].name + ' prompt...';
   const r = await api('/api/orders', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ product_id: picked.size.product_id, qty: Number($('q').value), phone: $('cc').value + $('ph').value, address: $('ad').value, age_confirmed: $('age').checked }),
+    body: JSON.stringify({ product_id: picked.size.product_id, qty: Number($('q').value), phone: $('cc').value + $('ph').value, address: $('ad').value, age_confirmed: $('age').checked, provider: provider(), lat: pin ? pin.lat : undefined, lng: pin ? pin.lng : undefined }),
   });
   if (!r.ok) { $('msg').className = 'err'; $('msg').textContent = r.data.error || 'Something went wrong. Please try again.'; $('go').disabled = false; return; }
   orderId = r.data.order_id;
