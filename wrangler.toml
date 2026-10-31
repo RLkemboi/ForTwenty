@@ -10,6 +10,15 @@ binding = "DB"
 database_name = "shisha-store-db"
 database_id = "54bc5359-dbc4-4047-97aa-deec768b69a2"
 
+# Per-visitor request limit on the public API (a Cloudflare Workers rate limiter, no dashboard rule needed).
+# 120 requests per minute per visitor address, counted separately in each Cloudflare location.
+[[ratelimits]]
+name = "RL_API"
+namespace_id = "7041"
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
 [triggers]
 crons = ["*/5 * * * *"]
 

@@ -392,6 +392,11 @@ export default {
     const path = url.pathname;
     const method = req.method;
     try {
+      // Public API only: Safaricom and Airtel callbacks, the health ping and the monitor are never limited, so they cannot be shut out.
+      if (env.RL_API && env.RATE_LIMIT_OFF !== '1' && path.startsWith('/api/') && !/^\/api\/(health|monitor\/|mpesa\/callback|airtel\/callback)/.test(path)) {
+        const { success } = await env.RL_API.limit({ key: clientIp(req) });
+        if (!success) return new Response(JSON.stringify({ error: 'Too many requests. Please slow down.' }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '30', ...SEC } });
+      }
       if (path === '/api/health') {
         // Prove the database is writable, but at most once every 10 seconds so this public URL cannot be used to burn write quota.
         let r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
