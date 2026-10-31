@@ -169,6 +169,11 @@
       <div class="row2"><input id="age" type="checkbox"><label for="age" style="margin:0;font-weight:400">I confirm I am 18 years or older.</label></div>
       <p id="total" style="margin:14px 0 0;font-weight:600"></p>
       <button class="pay" id="go" type="submit">Pay with M-Pesa</button>
+      <div id="cfm" class="box" style="display:none" role="alertdialog" aria-labelledby="cfmt">
+        <b id="cfmt" style="font-size:17px"></b>
+        <button class="pay" id="cfmy" type="button" style="background:#1a1a1a;color:#fff;border:0;border-radius:10px">Yes, send the prompt</button>
+        <button class="pay" id="cfmn" type="button" style="border:1px solid #1a1a1a;background:#fff;border-radius:10px;margin-top:8px">No, change the number</button>
+      </div>
     </form>
     <div id="msg" role="status"></div>
     <div id="prog" style="display:none" aria-live="polite">
@@ -403,7 +408,7 @@ function renderProg(state) {
   $('pmsg').textContent = failed || (state === 'delivered' ? 'Thank you! Enjoy.' : state === 'assigned' ? 'We also sent you an SMS. Order ' + orderId : '');
   $('again').style.display = failed ? 'block' : 'none';
 }
-function showForm() { $('f').style.display = ''; $('prog').style.display = 'none'; $('demo').style.display = 'none'; clearInterval(timer); }
+function showForm() { $('f').style.display = ''; $('cfm').style.display = 'none'; $('go').style.display = ''; $('prog').style.display = 'none'; $('demo').style.display = 'none'; clearInterval(timer); }
 $('again').onclick = () => { showForm(); $('go').disabled = false; $('msg').textContent = ''; };
 
 async function poll() {
@@ -418,6 +423,17 @@ async function poll() {
 $('f').onsubmit = async (e) => {
   e.preventDefault();
   if (mapReady() && !pin) { $('msg').className = 'err'; $('msg').textContent = 'Please pin your spot on the map, or tap "Use my current location".'; return; }
+  const num = resolvePhone($('cc').value, $('ph').value);
+  if (!num) { $('msg').className = 'err'; $('msg').textContent = 'Check the phone number: it must be a Kenyan number, like 0712 345 678.'; $('ph').focus(); return; }
+  // Last check before a payment prompt is sent to a phone: show the number and ask.
+  const q = Number($('q').value), total = picked.size.price_kes * q + (config.delivery_fee_kes || 0);
+  $('msg').textContent = '';
+  $('cfmt').textContent = `Send the ${PROV[provider()].name} prompt for KSh ${total} to +${num.slice(0, 3)} ${num.slice(3, 6)} ${num.slice(6, 9)} ${num.slice(9)}? Please make sure this is your own number.`;
+  $('go').style.display = 'none'; $('cfm').style.display = 'block'; $('cfmy').focus();
+};
+$('cfmn').onclick = () => { $('cfm').style.display = 'none'; $('go').style.display = ''; $('ph').focus(); };
+$('cfmy').onclick = async () => {
+  $('cfm').style.display = 'none'; $('go').style.display = '';
   $('go').disabled = true; $('msg').className = ''; $('msg').textContent = '';
   $('f').style.display = 'none'; $('prog').style.display = 'block'; renderProg('sending');
   const r = await api('/api/orders', {
