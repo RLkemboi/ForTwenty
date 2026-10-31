@@ -10,7 +10,9 @@ const rid = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => ALP
 export function normalizePhone(raw) {
   let p = String(raw || '').replace(/[\s()-]/g, '');
   if (p.startsWith('+')) p = p.slice(1);
+  if (p.startsWith('00')) p = p.slice(2);
   if (/^0[17]\d{8}$/.test(p)) p = '254' + p.slice(1);
+  p = p.replace(/^254(?:0|254)(?=[17]\d{8}$)/, '254'); // +254 then 0712..., or the code typed twice
   return /^254[17]\d{8}$/.test(p) ? p : null;
 }
 

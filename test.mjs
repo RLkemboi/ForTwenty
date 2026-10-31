@@ -25,6 +25,16 @@ for (const ph of ['0712345678', '+254712345678', '254712345678', '0112345678']) 
 check('admin needs token', (await fetch(B + '/api/admin/orders')).status === 403);
 check('callback rejects wrong secret', (await post('/api/mpesa/callback/wrong', {})).status === 403);
 
+// Phone resolving: a leading 0 after +254, a doubled code, 00 prefix and spaces all end up as 254712......
+const variants = { '+2540712000011': '254712000011', '+254254712000012': '254712000012', '00254712000013': '254712000013', '0712 000 014': '254712000014', '+254 712 000 015': '254712000015', '254 0112000016': '254112000016' };
+for (const [raw, want] of Object.entries(variants)) {
+  const r = await (await order({ phone: raw, address: 'Phone resolve test' })).json();
+  const row = (await orders()).find((o) => o.id === r.order_id);
+  check('phone ' + raw + ' -> ' + want, row && row.phone === want, JSON.stringify(row));
+}
+check('other country code rejected', (await order({ phone: '+255712000017' })).status === 400);
+check('too few digits rejected', (await order({ phone: '+254 712 000' })).status === 400);
+
 // Totals come from the database
 const a = await (await order({ phone: '0722000001', product_id: 2, qty: 2 })).json();
 check('packet x2 total is 1200', a.total_kes === 1200, JSON.stringify(a));
