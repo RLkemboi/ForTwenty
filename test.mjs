@@ -121,5 +121,10 @@ check('airtel callback cannot pay an M-Pesa order', (await status(mp.order_id)) 
 const smsAll = await sms();
 check('rider SMS has map link', smsAll.some((m) => /maps\.google\.com\/\?q=-0\.303100,36\.080000/.test(m.body)), 'no map link in sms_log');
 
+// Address optional with a pin, required without
+check('pin only (no address) accepted', (await order({ phone: '0733000007', address: '', lat: -0.3031, lng: 36.08 })).status === 200);
+check('no pin and no address rejected', (await order({ phone: '0733000008', address: '' })).status === 400);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
+

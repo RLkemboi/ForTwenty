@@ -27,6 +27,16 @@ const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
 const alertOwners = (env, msg) => Promise.all(String(env.ALERT_PHONES || '').split(',').filter(Boolean).map((n) => sendSms(env, n.trim(), msg)));
 
 async function assignRider(env, orderId) {
+  if (env.RIDER_MODE === 'demo') {
+    // DEMO: finding a rider always succeeds. The first active rider takes every order and is never marked busy.
+    const rider = await env.DB.prepare('SELECT id, phone FROM riders WHERE active = 1 ORDER BY id LIMIT 1').first();
+    if (!rider) return false;
+    const set = await env.DB.prepare("UPDATE orders SET rider_id = ?, status = 'assigned' WHERE id = ? AND status = 'paid' AND rider_id IS NULL").bind(rider.id, orderId).run();
+    if (set.meta.changes !== 1) return false;
+    const o = await env.DB.prepare('SELECT address, phone, delivery_token, total_kes, lat, lng FROM orders WHERE id = ?').bind(orderId).first();
+    await sendSms(env, rider.phone, `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Call customer: +${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`);
+    return true;
+  }
   for (let attempt = 0; attempt < 3; attempt++) {
     const rider = await env.DB.prepare('SELECT id, name, phone FROM riders WHERE active = 1 AND busy = 0 ORDER BY id LIMIT 1').first();
     if (!rider) {
@@ -114,8 +124,10 @@ async function createOrder(env, req) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'The map pin is not valid. Please pin again.' }, 400);
     if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our Nakuru delivery area.' }, 400);
   }
-  const address = String(b.address || '').trim();
-  if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters).' }, 400);
+  // With a map pin the landmark is optional; without one we need a written delivery spot.
+  let address = String(b.address || '').trim();
+  if (!address && lat !== null) address = 'Map pin only (no landmark)';
+  if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters), or pin your location on the map.' }, 400);
   const qty = Number(b.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > 10) return json({ error: 'Quantity must be 1 to 10.' }, 400);
   const product = await env.DB.prepare('SELECT id, price_kes FROM products WHERE id = ? AND active = 1').bind(Number(b.product_id)).first();

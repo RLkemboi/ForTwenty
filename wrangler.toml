@@ -20,6 +20,7 @@ PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval e
 SMS_MODE = "at"               # "mock" logs messages only; "at" sends through Africa's Talking (AT_ENV decides sandbox or live)
 DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account
+RIDER_MODE = "demo"           # DEMO: finding a rider always passes. Set "real" to use free/busy riders and the queue
 ENABLED_PROVIDERS = "mpesa,airtel"  # remove "airtel" to hide it until the Airtel account is live
 AT_ENV = "sandbox"            # Africa's Talking test servers; set "live" when going live
 ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is added when provided
