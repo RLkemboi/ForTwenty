@@ -51,7 +51,9 @@ CREATE TABLE IF NOT EXISTS orders (
   offer_round INTEGER NOT NULL DEFAULT 0,
   declined_by TEXT NOT NULL DEFAULT '',  -- riders who declined or missed it this round
   retry_at INTEGER,
-  alerted INTEGER NOT NULL DEFAULT 0
+  alerted INTEGER NOT NULL DEFAULT 0,
+  delivery_fee_kes INTEGER NOT NULL DEFAULT 0,   -- paid to the rider
+  distance_km REAL
 );
 CREATE INDEX IF NOT EXISTS orders_status ON orders(status, created_at);
 

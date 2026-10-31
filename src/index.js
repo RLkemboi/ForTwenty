@@ -28,13 +28,14 @@ const offerMs = (env) => Number(env.OFFER_SECONDS || 120) * 1000;        // how 
 const roundPauseMs = (env) => Number(env.ROUND_PAUSE_SECONDS || 60) * 1000; // wait before going round the riders again
 const ALERT_AFTER_MS = 5 * 60 * 1000;
 const idList = (x) => String(x || '').split(',').filter(Boolean).map(Number);
-const riderCut = (env, total) => Math.round((total * Number(env.RIDER_CUT_PCT || 0)) / 100);
+// The rider is paid the delivery fee. Old orders (fee 0) fall back to the percentage setting.
+const riderCut = (env, o) => (Number(o.delivery_fee_kes) > 0 ? Number(o.delivery_fee_kes) : Math.round((Number(o.total_kes) * Number(env.RIDER_CUT_PCT || 0)) / 100));
 const riderLink = (env, r) => env.PUBLIC_URL + '/r/' + r.token;
 const detailsSms = (env, o) => `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Call customer: +${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`;
 
 async function offerOrder(env, orderId) {
   const now = Date.now();
-  const o = await env.DB.prepare("SELECT id, address, total_kes, declined_by, retry_at FROM orders WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND (offered_to IS NULL OR offer_expires <= ?)").bind(orderId, now).first();
+  const o = await env.DB.prepare("SELECT id, address, total_kes, delivery_fee_kes, declined_by, retry_at FROM orders WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND (offered_to IS NULL OR offer_expires <= ?)").bind(orderId, now).first();
   if (!o || (o.retry_at && o.retry_at > now)) return false;
   // Free = admin-enabled, on duty, not on a delivery, and not already holding another live offer.
   const free = (await env.DB.prepare("SELECT id, phone, token FROM riders r WHERE active = 1 AND on_duty = 1 AND busy = 0 AND NOT EXISTS (SELECT 1 FROM orders x WHERE x.offered_to = r.id AND x.status = 'paid' AND x.rider_id IS NULL AND x.offer_expires > ?) ORDER BY id").bind(now).all()).results;
@@ -47,7 +48,7 @@ async function offerOrder(env, orderId) {
   }
   const set = await env.DB.prepare("UPDATE orders SET offered_to = ?, offer_expires = ?, retry_at = NULL WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND (offered_to IS NULL OR offer_expires <= ?)").bind(pick.id, now + offerMs(env), o.id, now).run();
   if (set.meta.changes !== 1) return false;
-  await sendSms(env, pick.phone, `New delivery offer: ${o.address}. You earn KSh ${riderCut(env, o.total_kes)}. Open within ${Math.round(offerMs(env) / 60000) || 1} min to accept: ${riderLink(env, pick)}`);
+  await sendSms(env, pick.phone, `New delivery offer: ${o.address}. You earn KSh ${riderCut(env, o)}. Open within ${Math.round(offerMs(env) / 60000) || 1} min to accept: ${riderLink(env, pick)}`);
   return true;
 }
 
@@ -93,7 +94,7 @@ async function declineOffer(env, rider, orderId) {
 async function completeDelivery(env, o) {
   const done = await env.DB.prepare("UPDATE orders SET status = 'delivered', delivered_at = ? WHERE id = ? AND status = 'assigned'").bind(Date.now(), o.id).run();
   if (done.meta.changes !== 1) return;
-  await env.DB.prepare('INSERT OR IGNORE INTO ledger (order_id, rider_id, amount_kes, created_at) VALUES (?, ?, ?, ?)').bind(o.id, o.rider_id, riderCut(env, o.total_kes), Date.now()).run();
+  await env.DB.prepare('INSERT OR IGNORE INTO ledger (order_id, rider_id, amount_kes, created_at) VALUES (?, ?, ?, ?)').bind(o.id, o.rider_id, riderCut(env, o), Date.now()).run();
   await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(o.rider_id).run();
   await sendSms(env, o.phone, `Order ${o.id} delivered. Thank you.`);
   await dispatchQueue(env);
@@ -112,16 +113,16 @@ async function riderState(env, rider) {
   if (env.RIDER_MODE === 'offers') await advanceQueue(env);
   const now = Date.now();
   const fresh = await env.DB.prepare('SELECT id, name, on_duty, busy FROM riders WHERE id = ?').bind(rider.id).first();
-  const offer = await env.DB.prepare("SELECT o.id, o.address, o.total_kes, o.lat, o.lng, o.offer_expires, p.name AS product, o.qty FROM orders o JOIN products p ON p.id = o.product_id WHERE o.offered_to = ? AND o.status = 'paid' AND o.rider_id IS NULL AND o.offer_expires > ? LIMIT 1").bind(rider.id, now).first();
-  const active = await env.DB.prepare("SELECT o.id, o.address, o.phone, o.total_kes, o.lat, o.lng, o.qty, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id WHERE o.rider_id = ? AND o.status = 'assigned' ORDER BY o.paid_at LIMIT 1").bind(rider.id).first();
+  const offer = await env.DB.prepare("SELECT o.id, o.address, o.total_kes, o.delivery_fee_kes, o.lat, o.lng, o.offer_expires, p.name AS product, o.qty FROM orders o JOIN products p ON p.id = o.product_id WHERE o.offered_to = ? AND o.status = 'paid' AND o.rider_id IS NULL AND o.offer_expires > ? LIMIT 1").bind(rider.id, now).first();
+  const active = await env.DB.prepare("SELECT o.id, o.address, o.phone, o.total_kes, o.delivery_fee_kes, o.lat, o.lng, o.qty, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id WHERE o.rider_id = ? AND o.status = 'assigned' ORDER BY o.paid_at LIMIT 1").bind(rider.id).first();
   const start = nairobiDayStart();
   const day = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE rider_id = ? AND status = \'delivered\' AND delivered_at >= ?').bind(rider.id, start).first();
   const earn = await env.DB.prepare('SELECT COALESCE(SUM(amount_kes), 0) AS k FROM ledger WHERE rider_id = ? AND created_at >= ?').bind(rider.id, start).first();
   const owed = await env.DB.prepare('SELECT COALESCE(SUM(amount_kes), 0) AS k FROM ledger WHERE rider_id = ? AND paid_out = 0').bind(rider.id).first();
   return {
     name: fresh.name, on_duty: !!fresh.on_duty, busy: !!fresh.busy, mode: env.RIDER_MODE,
-    offer: offer ? { ...offer, cut_kes: riderCut(env, offer.total_kes), seconds_left: Math.max(0, Math.round((offer.offer_expires - now) / 1000)), map: offer.lat != null ? mapLink(offer.lat, offer.lng) : null } : null,
-    active: active ? { ...active, cut_kes: riderCut(env, active.total_kes), map: active.lat != null ? mapLink(active.lat, active.lng) : null } : null,
+    offer: offer ? { ...offer, cut_kes: riderCut(env, offer), seconds_left: Math.max(0, Math.round((offer.offer_expires - now) / 1000)), map: offer.lat != null ? mapLink(offer.lat, offer.lng) : null } : null,
+    active: active ? { ...active, cut_kes: riderCut(env, active), map: active.lat != null ? mapLink(active.lat, active.lng) : null } : null,
     today: { deliveries: day.n, earned_kes: earn.k }, owed_kes: owed.k,
   };
 }
@@ -211,6 +212,25 @@ export async function processAirtelCallback(env, body) {
   return { ok: true, reason: 'paid' };
 }
 
+// ---------- Delivery price ----------
+// Fee = base + per-km rate x road distance (straight line x ROAD_FACTOR) from the shop to the pin, rounded UP to DELIVERY_ROUND_KES,
+// never below DELIVERY_MIN_KES. No pin = a flat fallback fee. The server works this out; the browser only displays it.
+const num = (v, d) => (v === undefined || v === '' || !Number.isFinite(Number(v)) ? d : Number(v));
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const r = (x) => (x * Math.PI) / 180, dLat = r(lat2 - lat1), dLng = r(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function deliveryQuote(env, lat, lng) {
+  const round = Math.max(1, num(env.DELIVERY_ROUND_KES, 10));
+  if (lat == null || lng == null) return { ok: true, km: null, fee_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), pinned: false };
+  const km = haversineKm(num(env.SHOP_LAT, -0.3031), num(env.SHOP_LNG, 36.08), lat, lng) * num(env.ROAD_FACTOR, 1.3);
+  const maxKm = num(env.DELIVERY_MAX_KM, 12);
+  const raw = num(env.DELIVERY_BASE_KES, 50) + num(env.DELIVERY_PER_KM_KES, 25) * km;
+  const fee = Math.max(num(env.DELIVERY_MIN_KES, 100), Math.ceil(raw / round) * round);
+  return { ok: km <= maxKm, km: Math.round(km * 10) / 10, fee_kes: fee, pinned: true, max_km: maxKm };
+}
+
 // ---------- Opening hours ----------
 // Orders are taken from OPEN_HOUR to CLOSE_HOUR, Nairobi time (24 = midnight). The owner can also close the shop by hand from /admin.
 const hourLabel = (h) => (h % 24 === 0 ? 'midnight' : (h % 12 || 12) + ':00 ' + (h < 12 ? 'am' : 'pm'));
@@ -259,10 +279,12 @@ async function createOrder(env, req) {
   const cap = Number(env.ORDER_LIMIT_10MIN || 5);
   if (byIp.n >= cap || byPhone.n >= cap) return json({ error: 'Too many orders in a short time. Please wait a few minutes and try again.' }, 429);
 
-  // Price comes from the database, never from the browser.
-  const total = product.price_kes * qty + Number(env.DELIVERY_FEE_KES || 0);
+  // Price comes from the database, never from the browser. The delivery fee is worked out here from the pin.
+  const dq = deliveryQuote(env, lat, lng);
+  if (!dq.ok) return json({ error: `That spot is about ${dq.km} km away. We deliver up to ${dq.max_km} km from the shop.` }, 400);
+  const total = product.price_kes * qty + dq.fee_kes;
   const id = rid(10);
-  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng, ip) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng, ip).run();
+  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng, ip, delivery_fee_kes, distance_km) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng, ip, dq.fee_kes, dq.km).run();
   try {
     const { checkoutRequestId } = await stkPush(env, { orderId: id, phone, amount: total, provider });
     await env.DB.prepare('UPDATE orders SET checkout_request_id = ? WHERE id = ?').bind(checkoutRequestId, id).run();
@@ -341,7 +363,14 @@ export default {
         if (prev && prev.stale_alerted) await alertOwners(env, 'The outside site monitor is reporting again.');
         return json({ ok: true });
       }
-      if (path === '/api/config') return json({ shop: await shopStatus(env), payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0), providers: providersOn(env), area: AREA });
+      if (path === '/api/config') return json({ shop: await shopStatus(env), payments_mode: env.PAYMENTS_MODE, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
+      if (path === '/api/quote' && method === 'GET') {
+        const la = url.searchParams.get('lat'), ln = url.searchParams.get('lng');
+        if (la === null || ln === null) return json(deliveryQuote(env, null, null));
+        const lat = Number(la), lng = Number(ln);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'Pin is outside our delivery area.' }, 400);
+        return json(deliveryQuote(env, lat, lng));
+      }
       if (path === '/api/flavors' && method === 'GET') {
         const fl = (await env.DB.prepare('SELECT id, name, blurb, color FROM flavors WHERE active = 1 ORDER BY sort, id').all()).results;
         const pr = (await env.DB.prepare('SELECT id, flavor_id, size, price_kes FROM products WHERE active = 1 AND flavor_id IS NOT NULL ORDER BY price_kes').all()).results;

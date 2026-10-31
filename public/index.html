@@ -199,7 +199,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const KES = (n) => 'KSh ' + n;
-let flavors = [], config = {}, orderId = null, timer = null, picked = null;
+let flavors = [], config = {}, orderId = null, timer = null, picked = null, quote = null, quoteSeq = 0;
 const GAP = 12;
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Normal speed is 3.5 seconds a card. ?ms=1200 is only for testing.
@@ -284,12 +284,23 @@ document.addEventListener('click', (e) => { if (!e.target.closest('#tips')) { $(
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('tips').classList.remove('open'); });
 
 /* ---------- Order popup ---------- */
+function deliveryFee() { return quote && quote.fee_kes != null ? quote.fee_kes : ((config.pricing && config.pricing.fallback_kes) || 0); }
+async function refreshQuote() {
+  const my = ++quoteSeq;
+  if (!pin) { quote = null; updateTotal(); return; }
+  const r = await api('/api/quote?lat=' + pin.lat + '&lng=' + pin.lng);
+  if (my !== quoteSeq) return;
+  quote = r.ok ? r.data : null;
+  if (quote && quote.ok === false) { $('pinhint').className = 'hint err'; $('pinhint').textContent = `That spot is about ${quote.km} km away. We deliver up to ${quote.max_km} km from the shop.`; }
+  updateTotal();
+}
 function updateTotal() {
   const q = Number($('q').value) || 0;
-  $('total').textContent = picked && q >= 1 ? 'Total: ' + KES(picked.size.price_kes * q + (config.delivery_fee_kes || 0)) : '';
+  const fee = deliveryFee();
+  $('total').textContent = picked && q >= 1 ? 'Total: ' + KES(picked.size.price_kes * q + fee) + ` (items ${KES(picked.size.price_kes * q)} + delivery ${KES(fee)}${quote && quote.km != null ? ', ' + quote.km + ' km' : ''})` : '';
 }
 function openOrder(flavor, size) {
-  picked = { flavor, size };
+  picked = { flavor, size }; quote = null;
   clearInterval(timer); orderId = null;
   $('dsub').textContent = `${flavor.name}, ${size.size === 'packet' ? 'packet' : 'sample'} (${KES(size.price_kes)} each)`;
   $('msg').textContent = ''; $('msg').className = ''; $('demo').style.display = 'none'; $('go').disabled = false;
@@ -299,6 +310,7 @@ function openOrder(flavor, size) {
   if (config.shop && !config.shop.open) { $('msg').className = 'err'; $('msg').textContent = config.shop.message; $('go').disabled = true; }
   $('dlg').showModal();
   showMap();
+  if (pin) refreshQuote();
 }
 $('close').onclick = () => $('dlg').close();
 $('dlg').addEventListener('close', () => clearInterval(timer));
@@ -366,10 +378,11 @@ function setPin(lat, lng, zoom) {
   if (/^Please pin/.test($('msg').textContent)) { $('msg').textContent = ''; $('msg').className = ''; }
   if (!marker) {
     marker = L.marker([lat, lng], { draggable: true, keyboard: true, title: 'Delivery pin' }).addTo(map);
-    marker.on('dragend', () => { const p = marker.getLatLng(); if (inArea(p.lat, p.lng)) { pin = { lat: p.lat, lng: p.lng }; pinText(); } else { marker.setLatLng([pin.lat, pin.lng]); $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; } });
+    marker.on('dragend', () => { const p = marker.getLatLng(); if (inArea(p.lat, p.lng)) { pin = { lat: p.lat, lng: p.lng }; pinText(); refreshQuote(); } else { marker.setLatLng([pin.lat, pin.lng]); $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; } });
   } else marker.setLatLng([lat, lng]);
   if (zoom) map.setView([lat, lng], zoom);
   pinText();
+  refreshQuote();
   return true;
 }
 function showMap() {
@@ -431,7 +444,8 @@ $('f').onsubmit = async (e) => {
   const num = resolvePhone($('cc').value, $('ph').value);
   if (!num) { $('msg').className = 'err'; $('msg').textContent = 'Check the phone number: it must be a Kenyan number, like 0712 345 678.'; $('ph').focus(); return; }
   // Last check before a payment prompt is sent to a phone: show the number and ask.
-  const q = Number($('q').value), total = picked.size.price_kes * q + (config.delivery_fee_kes || 0);
+  if (quote && quote.ok === false) { $('msg').className = 'err'; $('msg').textContent = `That spot is about ${quote.km} km away. We deliver up to ${quote.max_km} km from the shop.`; return; }
+  const q = Number($('q').value), total = picked.size.price_kes * q + deliveryFee();
   $('msg').textContent = '';
   $('cfmt').textContent = `Send the ${PROV[provider()].name} prompt for KSh ${total} to +${num.slice(0, 3)} ${num.slice(3, 6)} ${num.slice(6, 9)} ${num.slice(9)}? Please make sure this is your own number.`;
   $('go').style.display = 'none'; $('cfm').style.display = 'block'; $('cfmy').focus();
