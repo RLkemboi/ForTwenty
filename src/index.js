@@ -129,11 +129,18 @@ async function createOrder(env, req) {
   if (!product) return json({ error: 'That item is not available.' }, 400);
   const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE phone = ? AND status = 'awaiting_payment' AND created_at > ?").bind(phone, Date.now() - 10 * 60 * 1000).first();
   if (recent.n >= 3) return json({ error: 'Too many unpaid orders. Please wait a few minutes.' }, 429);
+  // Per-visitor limit: at most 5 orders of any kind from one IP, and 5 per phone, in 10 minutes (stops text spam).
+  const ip = req.headers.get('cf-connecting-ip') || 'unknown';
+  const since = Date.now() - 10 * 60 * 1000;
+  const byIp = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE ip = ? AND created_at > ?').bind(ip, since).first();
+  const byPhone = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE phone = ? AND created_at > ?').bind(phone, since).first();
+  const cap = Number(env.ORDER_LIMIT_10MIN || 5);
+  if (byIp.n >= cap || byPhone.n >= cap) return json({ error: 'Too many orders in a short time. Please wait a few minutes and try again.' }, 429);
 
   // Price comes from the database, never from the browser.
   const total = product.price_kes * qty + Number(env.DELIVERY_FEE_KES || 0);
   const id = rid(10);
-  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng).run();
+  await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng, ip) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng, ip).run();
   try {
     const { checkoutRequestId } = await stkPush(env, { orderId: id, phone, amount: total, provider });
     await env.DB.prepare('UPDATE orders SET checkout_request_id = ? WHERE id = ?').bind(checkoutRequestId, id).run();

@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS orders (
   delivered_at INTEGER,
   provider TEXT NOT NULL DEFAULT 'mpesa',   -- mpesa | airtel
   lat REAL,
-  lng REAL
+  lng REAL,
+  ip TEXT
 );
 CREATE INDEX IF NOT EXISTS orders_status ON orders(status, created_at);
 
