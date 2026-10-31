@@ -16,10 +16,14 @@ export async function sendSms(env, to, body) {
       });
       // AT answers 201 even when a single recipient is rejected, so read the per-recipient status.
       // 100 Processed, 101 Sent, 102 Queued are fine; anything else is a failure.
-      const data = await res.json().catch(() => null);
+      const txt = await res.text().catch(() => '');
+      let data = null; try { data = JSON.parse(txt); } catch { /* not JSON */ }
       const r = data && data.SMSMessageData && data.SMSMessageData.Recipients && data.SMSMessageData.Recipients[0];
-      if (!res.ok) status = 'failed:' + res.status;
-      else if (r && [100, 101, 102].includes(Number(r.statusCode))) status = 'sent';
+      if (!res.ok) {
+        // Diagnostics for setup problems: AT's own error text, the username used, and the key LENGTH (never the key).
+        status = `failed:${res.status} ${txt.replace(/\s+/g, ' ').slice(0, 90)} [host=${host} user=${env.AT_USERNAME || 'MISSING'} keylen=${(env.AT_API_KEY || '').length}]`;
+      }
+      else if (res.ok && r && [100, 101, 102].includes(Number(r.statusCode))) status = 'sent';
       else status = 'failed:' + ((r && r.status) || 'no_recipient');
     } catch (e) {
       status = 'failed:network';
