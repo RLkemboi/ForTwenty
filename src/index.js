@@ -1,5 +1,5 @@
 import { stkPush, queryStatus } from './payments.js';
-import { sendSms } from './sms.js';
+import { sendSms, retryFailed } from './sms.js';
 import { normalizePhone, phoneList } from './phone.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -159,6 +159,7 @@ async function reconcile(env) {
       else await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ? AND status = 'awaiting_payment'").bind(o.id).run();
     } catch { /* try again next run */ }
   }
+  await retryFailed(env);
   // Paid orders still waiting for a rider.
   const queued = await env.DB.prepare("SELECT id FROM orders WHERE status = 'paid' AND rider_id IS NULL ORDER BY paid_at").all();
   for (const q of queued.results) if (!(await assignRider(env, q.id))) break;

@@ -120,7 +120,7 @@ function render() {
   }</tbody></table></div>`;
 
   $('t-sms').innerHTML = `<p class="muted">Newest first. "sent" means Africa's Talking accepted it. Anything else needs a look.</p><div class="tablewrap"><table><thead><tr><th>When</th><th>To</th><th>Result</th><th>Message</th></tr></thead><tbody>${
-    data.sms.map((m) => `<tr><td>${when(m.created_at)}</td><td>+${esc(m.to_phone)}</td><td>${pill(m.status)}<div class="muted">${esc(m.status.length > 12 ? m.status : '')}</div></td><td>${esc(m.body)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No messages yet.</td></tr>'
+    data.sms.map((m) => `<tr><td>${when(m.created_at)}</td><td>+${esc(m.to_phone)}</td><td>${pill(m.status)}${m.attempts > 1 ? ' <span class="muted">try ' + m.attempts + '</span>' : ''}<div class="muted">${esc(m.status.length > 12 ? m.status : '')}</div></td><td>${esc(m.body)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No messages yet.</td></tr>'
   }</tbody></table></div>`;
 }
 

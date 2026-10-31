@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS sms_log (
   to_phone TEXT NOT NULL,
   body TEXT NOT NULL,
   status TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS blocked_phones (
