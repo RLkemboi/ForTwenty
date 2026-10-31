@@ -171,10 +171,18 @@ async function reconcile(env) {
 
 const adminOk = (req, env) => env.ADMIN_TOKEN && req.headers.get('authorization') === 'Bearer ' + env.ADMIN_TOKEN;
 
-const deliveryPage = (o, token) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery</title>
-<body style="font-family:system-ui;max-width:420px;margin:24px auto;padding:0 16px"><h2>Delivery</h2><p><b>Address:</b> ${o.address.replace(/</g, '&lt;')}</p>${o.lat != null ? `<p><a href="${mapLink(o.lat, o.lng)}" style="font-size:18px">Open the pin in Maps</a></p>` : ''}<p><b>Customer:</b> <a href="tel:+${o.phone}">+${o.phone}</a></p><p><b>Amount paid:</b> KSh ${o.total_kes}</p>
-<button id="b" style="font-size:18px;padding:14px 20px;width:100%">Mark delivered</button><p id="m"></p>
-<script>b.onclick=async()=>{b.disabled=true;const r=await fetch('/api/deliver/${token}',{method:'POST'});m.textContent=r.ok?'Done. Thank you.':'Could not save. Try again.';if(!r.ok)b.disabled=false};</script>`;
+const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const deliveryPage = (o, token) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Delivery</title>
+<style>body{font-family:system-ui,sans-serif;max-width:440px;margin:0 auto;padding:16px;color:#1a1a1a;background:#fafaf8}h1{font-size:22px;margin:4px 0 14px}.c{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px 16px;margin:10px 0}.c small{display:block;color:#666;font-size:13px;margin-bottom:2px}.c b{font-size:18px}a.btn,button{display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none;font-size:18px;padding:16px;border-radius:12px;border:0;margin-top:10px;cursor:pointer}a.map{background:#1a73e8;color:#fff}a.call{background:#fff;color:#1a1a1a;border:2px solid #1a1a1a}button{background:#1b7f5a;color:#fff}button:disabled{opacity:.5}#m{font-size:17px;margin-top:12px;text-align:center}</style>
+<body><h1>Delivery</h1>
+<div class="c"><small>Order</small><b>${esc(o.product)} x ${esc(o.qty)}</b></div>
+<div class="c"><small>Deliver to</small><b>${esc(o.address)}</b></div>
+<div class="c"><small>Already paid</small><b>KSh ${esc(o.total_kes)}</b><br><small style="margin:6px 0 0">Do not collect cash.</small></div>
+${o.lat != null ? `<a class="btn map" href="${mapLink(o.lat, o.lng)}">Open the pin in Maps</a>` : ''}
+<a class="btn call" href="tel:+${esc(o.phone)}">Call customer +${esc(o.phone)}</a>
+<button id="b">Mark delivered</button><p id="m" role="status"></p>
+<script>b.onclick=async()=>{if(!confirm('Mark this order as delivered?'))return;b.disabled=true;const r=await fetch('/api/deliver/${token}',{method:'POST'});m.textContent=r.ok?'Done. Thank you.':'Could not save. Try again.';if(!r.ok)b.disabled=false};</script></html>`;
 
 export default {
   async fetch(req, env) {
@@ -233,9 +241,9 @@ export default {
 
       m = path.match(/^\/d\/([a-z0-9]+)$/);
       if (m && method === 'GET') {
-        const o = await env.DB.prepare('SELECT address, phone, total_kes, status, lat, lng FROM orders WHERE delivery_token = ?').bind(m[1]).first();
+        const o = await env.DB.prepare('SELECT o.address, o.phone, o.total_kes, o.status, o.lat, o.lng, o.qty, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id WHERE o.delivery_token = ?').bind(m[1]).first();
         if (!o) return html('<p>Link not found.</p>', 404);
-        return html(o.status === 'delivered' ? '<p>Already marked delivered.</p>' : deliveryPage(o, m[1]));
+        return html(o.status === 'delivered' ? '<meta name="viewport" content="width=device-width,initial-scale=1"><p style="font-family:system-ui;font-size:20px;padding:24px">Already marked delivered. Thank you.</p>' : deliveryPage(o, m[1]));
       }
 
       m = path.match(/^\/api\/deliver\/([a-z0-9]+)$/);
@@ -256,14 +264,35 @@ export default {
 
       if (path.startsWith('/api/admin/')) {
         if (!adminOk(req, env)) return json({ error: 'Forbidden' }, 403);
-        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT id, status, total_kes, phone, address, rider_id, mpesa_receipt, created_at, provider, lat, lng FROM orders ORDER BY created_at DESC LIMIT 100').all()).results);
-        if (path === '/api/admin/riders') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.busy, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results);
+        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT o.id, o.status, o.total_kes, o.qty, o.phone, o.address, o.rider_id, o.mpesa_receipt, o.created_at, o.provider, o.lat, o.lng, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id ORDER BY o.created_at DESC LIMIT 100').all()).results);
+        if (path === '/api/admin/riders' && method === 'GET') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.active, r.busy, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results);
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/settle$/);
         if (m && method === 'POST') {
           await env.DB.prepare('UPDATE ledger SET paid_out = 1 WHERE rider_id = ? AND paid_out = 0').bind(Number(m[1])).run();
           return json({ ok: true });
         }
-        if (path === '/api/admin/sms') return json((await env.DB.prepare('SELECT * FROM sms_log ORDER BY id DESC LIMIT 50').all()).results);
+        if (path === '/api/admin/riders' && method === 'POST') {
+          const b = await req.json().catch(() => ({}));
+          const name = String(b.name || '').trim(), phone = normalizePhone(b.phone);
+          if (name.length < 2 || name.length > 40) return json({ error: 'Name must be 2 to 40 characters.' }, 400);
+          if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
+          const r = await env.DB.prepare('INSERT INTO riders (name, phone) VALUES (?, ?)').bind(name, phone).run();
+          return json({ ok: true, id: r.meta.last_row_id });
+        }
+        m = path.match(/^\/api\/admin\/riders\/(\d+)\/update$/);
+        if (m && method === 'POST') {
+          const b = await req.json().catch(() => ({}));
+          const cur = await env.DB.prepare('SELECT * FROM riders WHERE id = ?').bind(Number(m[1])).first();
+          if (!cur) return json({ error: 'Not found' }, 404);
+          const name = b.name === undefined ? cur.name : String(b.name).trim();
+          const phone = b.phone === undefined ? cur.phone : normalizePhone(b.phone);
+          const active = b.active === undefined ? cur.active : (b.active ? 1 : 0);
+          if (name.length < 2 || name.length > 40) return json({ error: 'Name must be 2 to 40 characters.' }, 400);
+          if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
+          await env.DB.prepare('UPDATE riders SET name = ?, phone = ?, active = ? WHERE id = ?').bind(name, phone, active, cur.id).run();
+          return json({ ok: true });
+        }
+        if (path === '/api/admin/sms') return json((await env.DB.prepare('SELECT * FROM sms_log ORDER BY id DESC LIMIT 100').all()).results);
       }
       return json({ error: 'Not found' }, 404);
     } catch (e) {

@@ -125,6 +125,30 @@ check('rider SMS has map link', smsAll.some((m) => /maps\.google\.com\/\?q=-0\.3
 check('pin only (no address) accepted', (await order({ phone: '0733000007', address: '', lat: -0.3031, lng: 36.08 })).status === 200);
 check('no pin and no address rejected', (await order({ phone: '0733000008', address: '' })).status === 400);
 
+// ---- Admin: riders and rider page (step 5) ----
+const postA = (p, body) => post(p, body, ADMIN);
+check('admin add rider needs token', (await post('/api/admin/riders', { name: 'Nope', phone: '0712000000' })).status === 403);
+check('admin add rider rejects bad phone', (await postA('/api/admin/riders', { name: 'Test Rider', phone: '123' })).status === 400);
+const nr = await (await postA('/api/admin/riders', { name: 'Test Rider', phone: '0712 000 111' })).json();
+check('admin add rider works', nr.ok === true && nr.id > 2, JSON.stringify(nr));
+let rl = await riders();
+check('new rider stored with +254 form', rl.find((r) => r.id === nr.id) && rl.find((r) => r.id === nr.id).phone === '254712000111', JSON.stringify(rl));
+check('admin update phone', (await (await postA('/api/admin/riders/' + nr.id + '/update', { phone: '+254 722 000 222' })).json()).ok === true);
+check('admin rider off duty', (await (await postA('/api/admin/riders/' + nr.id + '/update', { active: 0 })).json()).ok === true);
+rl = await riders();
+const nr2 = rl.find((r) => r.id === nr.id);
+check('update stored', nr2.phone === '254722000222' && nr2.active === 0 && nr2.name === 'Test Rider', JSON.stringify(nr2));
+check('update unknown rider 404', (await postA('/api/admin/riders/9999/update', { name: 'Zed' })).status === 404);
+const ord = (await orders()).find((o) => o.product);
+check('admin orders carry product name', !!ord && typeof ord.product === 'string', JSON.stringify(ord));
+// Rider page shows the item, a call link and escapes the address
+const xo = await (await order({ phone: '0733000009', address: '<b>x</b> Test', lat: -0.3031, lng: 36.08 })).json();
+await pay(xo.order_id, { result: 0 });
+const tok2 = (await sms()).map((m) => (m.body.match(/\/d\/([a-z0-9]+)/) || [])[1]).filter(Boolean)[0];
+const page = await (await fetch(B + '/d/' + tok2)).text();
+check('rider page has call link and map link', /tel:\+254/.test(page) && /maps\.google\.com/.test(page), page.slice(0, 200));
+check('rider page escapes html', !/<b>x<\/b>/.test(page));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

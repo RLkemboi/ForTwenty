@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f4f1; color: #1a1a1a; }
+  header { position: sticky; top: 0; z-index: 3; background: #1a1a1a; color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
+  header b { flex: 1; }
+  header button { background: #333; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+  main { max-width: 980px; margin: 0 auto; padding: 14px; }
+  #login { max-width: 360px; margin: 18vh auto; padding: 20px; background: #fff; border-radius: 14px; border: 1px solid #ddd; }
+  input, select { font-size: 16px; padding: 10px; border: 1px solid #bbb; border-radius: 8px; width: 100%; }
+  .btn { font-size: 16px; padding: 11px 16px; border: 0; border-radius: 8px; background: #1a1a1a; color: #fff; cursor: pointer; }
+  .btn.sm { font-size: 13px; padding: 6px 10px; }
+  .btn.ghost { background: #fff; color: #1a1a1a; border: 1px solid #bbb; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; }
+  .tile small { color: #666; display: block; }
+  .tile b { font-size: 22px; }
+  .tile.bad b { color: #b00020; }
+  nav { display: flex; gap: 6px; margin-bottom: 10px; }
+  nav button { flex: 1; padding: 10px; border: 1px solid #bbb; background: #fff; border-radius: 8px; font-size: 15px; cursor: pointer; }
+  nav button.on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .tablewrap { overflow-x: auto; background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { background: #fafafa; font-size: 12px; text-transform: uppercase; color: #555; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eee; }
+  .pill.ok { background: #d9f2e6; color: #0b5d3b; } .pill.warn { background: #fff0c2; color: #7a5a00; } .pill.bad { background: #fbd9de; color: #8a0018; }
+  .err { color: #b00020; } .muted { color: #666; font-size: 13px; }
+  .form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 12px; margin-bottom: 10px; }
+  @media (max-width: 560px) { .form { grid-template-columns: 1fr; } }
+  td .small-in { width: 100%; min-width: 110px; padding: 6px; font-size: 14px; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-word; }
+</style>
+</head>
+<body>
+<div id="login">
+  <h2 style="margin-top:0">Admin</h2>
+  <label for="tok">Admin token</label>
+  <input id="tok" type="password" autocomplete="current-password" style="margin:6px 0 12px">
+  <button class="btn" id="enter" type="button" style="width:100%">Open</button>
+  <p id="lmsg" class="err" role="alert"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header><b>Admin</b><span class="muted" id="upd" style="color:#bbb"></span><button id="refresh" type="button">Refresh</button><button id="out" type="button">Log out</button></header>
+  <main>
+    <div class="tiles" id="tiles"></div>
+    <nav id="tabs">
+      <button data-t="orders" class="on">Orders</button>
+      <button data-t="riders">Riders</button>
+      <button data-t="sms">SMS log</button>
+    </nav>
+    <section id="t-orders"></section>
+    <section id="t-riders" style="display:none"></section>
+    <section id="t-sms" style="display:none"></section>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let token = ''; try { token = sessionStorage.getItem('adm') || ''; } catch {}
+let data = { orders: [], riders: [], sms: [] }, timer = null;
+
+async function call(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, j };
+}
+const when = (t) => new Date(t).toLocaleString('en-KE', { timeZone: 'Africa/Nairobi', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const pill = (s) => {
+  const cls = ['delivered', 'sent', 'mock'].includes(s) || s === 'assigned' ? 'ok' : s === 'paid' || s === 'awaiting_payment' ? 'warn' : /fail|mismatch|expired|blocked/.test(s) ? 'bad' : '';
+  return `<span class="pill ${cls}">${esc(String(s).split(' ')[0])}</span>`;
+};
+
+async function load() {
+  const [o, r, s] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms')]);
+  if (o.status === 403) { logout('That token is not correct.'); return false; }
+  data = { orders: o.j || [], riders: r.j || [], sms: s.j || [] };
+  $('upd').textContent = 'Updated ' + new Date().toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  render();
+  return true;
+}
+
+function render() {
+  const day = Date.now() - 24 * 3600 * 1000;
+  const paidOrders = data.orders.filter((x) => ['paid', 'assigned', 'delivered'].includes(x.status));
+  const paid24 = paidOrders.filter((x) => x.created_at > day);
+  const stuck = data.orders.filter((x) => x.status === 'paid' || x.status === 'amount_mismatch').length;
+  const smsBad = data.sms.filter((m) => !['sent', 'mock'].includes(m.status) && m.created_at > day).length;
+  const owed = data.riders.reduce((a, r) => a + (r.owed_kes || 0), 0);
+  $('tiles').innerHTML = `
+    <div class="tile"><small>Paid orders, 24h</small><b>${paid24.length}</b></div>
+    <div class="tile"><small>Paid value, 24h</small><b>KSh ${paid24.reduce((a, x) => a + x.total_kes, 0)}</b></div>
+    <div class="tile ${stuck ? 'bad' : ''}"><small>Need attention</small><b>${stuck}</b></div>
+    <div class="tile ${smsBad ? 'bad' : ''}"><small>Failed or blocked SMS, 24h</small><b>${smsBad}</b></div>
+    <div class="tile"><small>Owed to riders</small><b>KSh ${owed}</b></div>`;
+
+  $('t-orders').innerHTML = `<div class="tablewrap"><table><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Item</th><th>Paid with</th><th>Customer</th><th>Where</th><th>Rider</th></tr></thead><tbody>${
+    data.orders.map((x) => `<tr><td>${when(x.created_at)}</td><td class="mono">${esc(x.id)}</td><td>${pill(x.status)}</td><td>${esc(x.product)} x ${x.qty}<br><b>KSh ${x.total_kes}</b></td><td>${esc(x.provider === 'airtel' ? 'Airtel Money' : 'M-Pesa')}</td><td>+${esc(x.phone)}</td><td>${esc(x.address)}${x.lat != null ? `<br><a href="https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" rel="noopener">Map pin</a>` : ''}</td><td>${x.rider_id ? '#' + x.rider_id : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">No orders yet.</td></tr>'
+  }</tbody></table></div>`;
+
+  $('t-riders').innerHTML = `<form class="form" id="addr"><input id="rn" placeholder="Rider name" maxlength="40" required><input id="rp" placeholder="Phone, e.g. 0712 345 678" inputmode="tel" required><button class="btn" type="submit">Add rider</button></form><p id="rmsg" class="err" role="alert"></p>
+    <div class="tablewrap"><table><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Status</th><th>Owed</th><th></th></tr></thead><tbody>${
+    data.riders.map((r) => `<tr data-id="${r.id}"><td>${r.id}</td><td><input class="small-in" data-f="name" value="${esc(r.name)}"></td><td><input class="small-in" data-f="phone" value="+${esc(r.phone)}" inputmode="tel"></td><td>${r.active ? (r.busy ? '<span class="pill warn">on a delivery</span>' : '<span class="pill ok">free</span>') : '<span class="pill">off duty</span>'}</td><td>KSh ${r.owed_kes}</td><td style="white-space:nowrap"><button class="btn sm" data-a="save">Save</button> <button class="btn sm ghost" data-a="toggle">${r.active ? 'Off duty' : 'On duty'}</button> <button class="btn sm ghost" data-a="settle" ${r.owed_kes ? '' : 'disabled'}>Mark paid out</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">No riders.</td></tr>'
+  }</tbody></table></div><p class="muted">Rider mode is a demo for now: every paid order goes to rider #1 whatever their status.</p>`;
+
+  $('t-sms').innerHTML = `<p class="muted">Newest first. "sent" means Africa's Talking accepted it. Anything else needs a look.</p><div class="tablewrap"><table><thead><tr><th>When</th><th>To</th><th>Result</th><th>Message</th></tr></thead><tbody>${
+    data.sms.map((m) => `<tr><td>${when(m.created_at)}</td><td>+${esc(m.to_phone)}</td><td>${pill(m.status)}<div class="muted">${esc(m.status.length > 12 ? m.status : '')}</div></td><td>${esc(m.body)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No messages yet.</td></tr>'
+  }</tbody></table></div>`;
+}
+
+$('tabs').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  for (const t of ['orders', 'riders', 'sms']) $('t-' + t).style.display = t === b.dataset.t ? '' : 'none';
+};
+
+document.addEventListener('submit', async (e) => {
+  if (e.target.id !== 'addr') return;
+  e.preventDefault();
+  const r = await call('/api/admin/riders', { name: $('rn').value, phone: $('rp').value });
+  if (!r.ok) { $('rmsg').textContent = r.j.error || 'Could not add the rider.'; return; }
+  await load(); document.querySelector('#tabs [data-t=riders]').click();
+});
+
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const tr = b.closest('tr'), id = tr.dataset.id, rider = data.riders.find((x) => String(x.id) === id);
+  b.disabled = true;
+  let r;
+  if (b.dataset.a === 'save') r = await call(`/api/admin/riders/${id}/update`, { name: tr.querySelector('[data-f=name]').value, phone: tr.querySelector('[data-f=phone]').value });
+  if (b.dataset.a === 'toggle') r = await call(`/api/admin/riders/${id}/update`, { active: rider.active ? 0 : 1 });
+  if (b.dataset.a === 'settle') { if (!confirm('Mark KSh ' + rider.owed_kes + ' as paid out to ' + rider.name + '? Do this only after you have sent the money.')) { b.disabled = false; return; } r = await call(`/api/admin/riders/${id}/settle`, {}); }
+  if (r && !r.ok) { alert(r.j.error || 'That did not work.'); }
+  await load(); document.querySelector('#tabs [data-t=riders]').click();
+});
+
+function logout(msg) {
+  try { sessionStorage.removeItem('adm'); } catch {}
+  token = ''; clearInterval(timer);
+  $('app').style.display = 'none'; $('login').style.display = ''; $('lmsg').textContent = msg || '';
+}
+async function enter() {
+  token = $('tok').value.trim() || token;
+  if (!token) { $('lmsg').textContent = 'Enter the admin token.'; return; }
+  if (await load()) {
+    try { sessionStorage.setItem('adm', token); } catch {}
+    $('login').style.display = 'none'; $('app').style.display = ''; $('tok').value = '';
+    clearInterval(timer); timer = setInterval(() => { if (!document.hidden && !document.activeElement.closest('td,.form')) load(); }, 15000);
+  }
+}
+$('enter').onclick = enter;
+$('tok').onkeydown = (e) => { if (e.key === 'Enter') enter(); };
+$('refresh').onclick = load;
+$('out').onclick = () => logout('');
+if (token) enter();
+</script>
+</body>
+</html>
