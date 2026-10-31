@@ -22,4 +22,4 @@ DARAJA_ENV = "sandbox"
 ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is added when provided
 RIDER_CUT_PCT = "10"          # PLACEHOLDER: real rider cut not yet decided
 DELIVERY_FEE_KES = "0"        # PLACEHOLDER: delivery fee not yet decided
-PUBLIC_URL = "http://localhost:8787"
+PUBLIC_URL = "https://fortwenty.kipp-ralph.workers.dev"
