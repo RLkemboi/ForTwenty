@@ -4,6 +4,13 @@
 export async function sendSms(env, to, body) {
   const now = Date.now();
   let status = 'mock';
+  // While payments are still a demo, anyone can trigger an SMS from the public site. If SMS_ALLOWLIST is set,
+  // only those numbers get a real message; everything else is logged as blocked and costs nothing.
+  const allow = String(env.SMS_ALLOWLIST || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (env.SMS_MODE === 'at' && allow.length && !allow.includes(to)) {
+    await env.DB.prepare('INSERT INTO sms_log (to_phone, body, status, created_at) VALUES (?, ?, ?, ?)').bind(to, body, 'blocked:not_on_allowlist', now).run();
+    return 'blocked:not_on_allowlist';
+  }
   if (env.SMS_MODE === 'at') {
     try {
       // A sandbox login (username "sandbox") only works on AT's sandbox servers, whatever AT_ENV says.
