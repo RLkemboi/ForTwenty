@@ -45,7 +45,7 @@ const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n
 // Decline or no answer = next rider. When every free rider has had a turn, pause a minute and go round again (never gives up).
 const offerMs = (env) => Number(env.OFFER_SECONDS || 120) * 1000;        // how long one rider has to answer
 const roundPauseMs = (env) => Number(env.ROUND_PAUSE_SECONDS || 60) * 1000; // wait before going round the riders again
-const ALERT_AFTER_MS = 5 * 60 * 1000;
+const ALERT_AFTER_MS = 30 * 60 * 1000;
 const idList = (x) => String(x || '').split(',').filter(Boolean).map(Number);
 // The rider is paid the delivery fee. Old orders (fee 0) fall back to the percentage setting.
 const riderCut = (env, o) => (Number(o.delivery_fee_kes) > 0 ? Number(o.delivery_fee_kes) : Math.round((Number(o.total_kes) * Number(env.RIDER_CUT_PCT || 0)) / 100));
@@ -83,7 +83,7 @@ async function advanceQueue(env) {
     await offerOrder(env, q.id);
     if (!q.alerted && now - q.paid_at > ALERT_AFTER_MS) {
       const a = await env.DB.prepare('UPDATE orders SET alerted = 1 WHERE id = ? AND alerted = 0').bind(q.id).run();
-      if (a.meta.changes === 1) await alertOwners(env, 'Paid order ' + q.id + ' has no rider after 5 minutes. Riders are still being offered it; check /admin.');
+      if (a.meta.changes === 1) await alertOwners(env, 'Paid order ' + q.id + ' has no rider after 30 minutes. Riders are still being offered it; check /admin.');
     }
   }
 }
