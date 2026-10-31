@@ -10,8 +10,9 @@ export const RETRY_WINDOW_MS = 30 * 60 * 1000; // a "rider is on the way" text i
 export const isRetryable = (status) => /^failed:(network|5\d\d|429|InsufficientBalance|SendFailed|Failed)/i.test(String(status));
 
 // Talks to Africa's Talking once. Returns a status string; never throws.
-export async function deliver(env, to, body) {
-  if (env.SMS_MODE !== 'at') return 'mock';
+// force=true is for owner alerts (site down, monitor silent): they use the real route even while customer SMS is in demo mode.
+export async function deliver(env, to, body, force = false) {
+  if (env.SMS_MODE !== 'at' && !(force && env.AT_API_KEY && env.AT_USERNAME)) return 'mock';
   // While payments are still a demo, anyone can trigger an SMS from the public site. If SMS_ALLOWLIST is set,
   // only those numbers get a real message; everything else is logged as blocked and costs nothing.
   if (String(env.SMS_ALLOWLIST || '').trim() !== '' && !phoneList(env.SMS_ALLOWLIST).includes(to)) return 'blocked:not_on_allowlist';
@@ -40,9 +41,9 @@ export async function deliver(env, to, body) {
   }
 }
 
-export async function sendSms(env, rawTo, body) {
+export async function sendSms(env, rawTo, body, { force = false } = {}) {
   const to = normalizePhone(rawTo) || String(rawTo || '').replace(/\D/g, '');
-  const status = await deliver(env, to, body);
+  const status = await deliver(env, to, body, force);
   await env.DB.prepare('INSERT INTO sms_log (to_phone, body, status, created_at, attempts) VALUES (?, ?, ?, ?, 1)').bind(to, body, status, Date.now()).run();
   return status;
 }

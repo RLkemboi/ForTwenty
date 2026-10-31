@@ -17,7 +17,7 @@ const providersOn = (env) => String(env.ENABLED_PROVIDERS || 'mpesa').split(',')
 // Placeholder service area around Nakuru town (roughly 25 km each way). Real delivery rules come later.
 const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
 
-const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n) => sendSms(env, n, msg)));
+const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n) => sendSms(env, n, msg, { force: true })));
 
 async function assignRider(env, orderId) {
   if (env.RIDER_MODE === 'demo') {
