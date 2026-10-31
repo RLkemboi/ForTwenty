@@ -1,8 +1,19 @@
+CREATE TABLE IF NOT EXISTS flavors (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  blurb TEXT NOT NULL DEFAULT '',
+  color TEXT NOT NULL DEFAULT '#444444',
+  sort INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   price_kes INTEGER NOT NULL CHECK (price_kes > 0),
-  active INTEGER NOT NULL DEFAULT 1
+  active INTEGER NOT NULL DEFAULT 1,
+  flavor_id INTEGER REFERENCES flavors(id),
+  size TEXT
 );
 
 CREATE TABLE IF NOT EXISTS riders (
@@ -50,6 +61,15 @@ CREATE TABLE IF NOT EXISTS sms_log (
 
 CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY CHECK (id = 1), ts INTEGER NOT NULL);
 
--- Placeholders: real names, prices and riders come from the client.
-INSERT OR IGNORE INTO products (id, name, price_kes) VALUES (1, 'Flavor sample (small roll)', 100), (2, 'Flavor packet', 600);
+-- Placeholders: real flavor names, prices and riders come from the client.
+INSERT OR IGNORE INTO flavors (id, name, blurb, color, sort) VALUES
+  (1, 'Double Apple', 'Sweet and sharp, the classic.', '#b3261e', 1),
+  (2, 'Mint', 'Cool and clean.', '#1b7f5a', 2),
+  (3, 'Grape', 'Rich and fruity.', '#5b3a9a', 3),
+  (4, 'Watermelon', 'Light and juicy.', '#c2410c', 4);
+INSERT OR IGNORE INTO products (id, name, price_kes, flavor_id, size) VALUES
+  (1, 'Double Apple, sample', 100, 1, 'sample'), (2, 'Double Apple, packet', 600, 1, 'packet'),
+  (3, 'Mint, sample', 100, 2, 'sample'), (4, 'Mint, packet', 600, 2, 'packet'),
+  (5, 'Grape, sample', 100, 3, 'sample'), (6, 'Grape, packet', 600, 3, 'packet'),
+  (7, 'Watermelon, sample', 100, 4, 'sample'), (8, 'Watermelon, packet', 600, 4, 'packet');
 INSERT OR IGNORE INTO riders (id, name, phone) VALUES (1, 'Demo rider 1', '254700000001'), (2, 'Demo rider 2', '254700000002');

@@ -135,6 +135,11 @@ export default {
         return json({ ok: !!r, ts: r && r.ts });
       }
       if (path === '/api/config') return json({ payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0) });
+      if (path === '/api/flavors' && method === 'GET') {
+        const fl = (await env.DB.prepare('SELECT id, name, blurb, color FROM flavors WHERE active = 1 ORDER BY sort, id').all()).results;
+        const pr = (await env.DB.prepare('SELECT id, flavor_id, size, price_kes FROM products WHERE active = 1 AND flavor_id IS NOT NULL ORDER BY price_kes').all()).results;
+        return json(fl.map((f) => ({ ...f, sizes: pr.filter((p) => p.flavor_id === f.id).map((p) => ({ product_id: p.id, size: p.size, price_kes: p.price_kes })) })).filter((f) => f.sizes.length));
+      }
       if (path === '/api/products' && method === 'GET') {
         const r = await env.DB.prepare('SELECT id, name, price_kes FROM products WHERE active = 1 ORDER BY id').all();
         return json(r.results);
