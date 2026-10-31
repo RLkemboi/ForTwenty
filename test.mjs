@@ -164,6 +164,14 @@ check('unblock via +254 form', (await (await postA('/api/admin/blocked/%2B254744
 check('unblocked number can order', (await order({ phone: '0744000001' })).status === 200);
 check('blocked list empty again', (await get('/api/admin/blocked', ADMIN)).length === 0);
 
+// ---- Monitor heartbeat ----
+check('heartbeat without token refused', (await post('/api/monitor/beat', { ok: true })).status === 403);
+check('heartbeat with wrong token refused', (await post('/api/monitor/beat', { ok: true }, { authorization: 'Bearer nope' })).status === 403);
+check('admin monitor empty before first beat', (await get('/api/admin/monitor', ADMIN)).ts === null);
+check('heartbeat accepted', (await (await post('/api/monitor/beat', { ok: true, detail: 'healthy' }, { authorization: 'Bearer dev-monitor-token' })).json()).ok === true);
+const mon = await get('/api/admin/monitor', ADMIN);
+check('admin monitor shows fresh beat', mon.ok === 1 && Math.abs(Date.now() - mon.ts) < 10000 && mon.stale_alerted === 0, JSON.stringify(mon));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

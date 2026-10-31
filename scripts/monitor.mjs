@@ -87,5 +87,14 @@ try {
     else console.log('[dry run] would close the outage issue');
     await sendSms(`RECOVERED: the shisha store site is back up (${nairobi()}). It was down about ${mins} min.`);
   } else console.log('OK: site healthy');
+  // Tell the site we are alive. Only possible when the site answers, which is when this branch runs.
+  if (!reason && process.env.MONITOR_TOKEN) {
+    if (dry) console.log('[dry run] would send heartbeat');
+    else {
+      const hb = await fetch(base + '/api/monitor/beat', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.MONITOR_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, detail: 'healthy' }) }).catch(() => null);
+      console.log('Heartbeat: ' + (hb && hb.ok ? 'recorded' : 'FAILED ' + (hb ? hb.status : 'no answer')));
+      if (!hb || !hb.ok) throw new Error('heartbeat was not accepted (check MONITOR_TOKEN on both sides)');
+    }
+  }
 } catch (e) { problem = e; }
 if (problem) { console.error('MONITOR PROBLEM: ' + problem.message); process.exit(1); }

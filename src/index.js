@@ -144,7 +144,17 @@ async function createOrder(env, req) {
   return json({ order_id: id, total_kes: total });
 }
 
+// The outside monitor reports in every ~5 minutes. If it goes quiet for 25 minutes we text once (GitHub paused it, or the site itself was down).
+const MONITOR_STALE_MS = 25 * 60 * 1000;
+async function watchMonitor(env) {
+  const b = await env.DB.prepare('SELECT ts, stale_alerted FROM monitor_beat WHERE id = 1').first();
+  if (!b || b.stale_alerted || Date.now() - b.ts < MONITOR_STALE_MS) return;
+  await env.DB.prepare('UPDATE monitor_beat SET stale_alerted = 1 WHERE id = 1 AND stale_alerted = 0').run();
+  await alertOwners(env, 'WARNING: the outside site monitor has not reported for ' + Math.round((Date.now() - b.ts) / 60000) + ' min. GitHub may have paused it. Check the Actions tab. Site down alerts are not being watched.');
+}
+
 async function reconcile(env) {
+  await watchMonitor(env);
   const now = Date.now();
   const stale = await env.DB.prepare("SELECT * FROM orders WHERE status = 'awaiting_payment' AND checkout_request_id IS NOT NULL AND created_at < ?").bind(now - 2 * 60 * 1000).all();
   for (const o of stale.results) {
@@ -190,6 +200,14 @@ export default {
         await env.DB.prepare('INSERT OR REPLACE INTO health (id, ts) VALUES (1, ?)').bind(Date.now()).run();
         const r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
         return json({ ok: !!r, ts: r && r.ts });
+      }
+      if (path === '/api/monitor/beat' && method === 'POST') {
+        if (!env.MONITOR_TOKEN || req.headers.get('authorization') !== 'Bearer ' + env.MONITOR_TOKEN) return json({ error: 'Forbidden' }, 403);
+        const b = await req.json().catch(() => ({}));
+        const prev = await env.DB.prepare('SELECT stale_alerted FROM monitor_beat WHERE id = 1').first();
+        await env.DB.prepare('INSERT INTO monitor_beat (id, ts, ok, detail, stale_alerted) VALUES (1, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, ok = excluded.ok, detail = excluded.detail, stale_alerted = 0').bind(Date.now(), b.ok ? 1 : 0, String(b.detail || '').slice(0, 200)).run();
+        if (prev && prev.stale_alerted) await alertOwners(env, 'The outside site monitor is reporting again.');
+        return json({ ok: true });
       }
       if (path === '/api/config') return json({ payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0), providers: providersOn(env), area: AREA });
       if (path === '/api/flavors' && method === 'GET') {
@@ -303,6 +321,7 @@ export default {
           await env.DB.prepare('DELETE FROM blocked_phones WHERE phone = ?').bind(phone).run();
           return json({ ok: true });
         }
+        if (path === '/api/admin/monitor') return json((await env.DB.prepare('SELECT ts, ok, detail, stale_alerted FROM monitor_beat WHERE id = 1').first()) || { ts: null });
         if (path === '/api/admin/sms') return json((await env.DB.prepare('SELECT * FROM sms_log ORDER BY id DESC LIMIT 100').all()).results);
       }
       return json({ error: 'Not found' }, 404);

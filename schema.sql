@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS blocked_phones (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS monitor_beat (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ts INTEGER NOT NULL,
+  ok INTEGER NOT NULL,
+  detail TEXT NOT NULL DEFAULT '',
+  stale_alerted INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY CHECK (id = 1), ts INTEGER NOT NULL);
 
 -- Placeholders: real flavor names, prices and riders come from the client.

@@ -26,4 +26,5 @@ jobs:
           ALERT_PHONES: ${{ secrets.ALERT_PHONES }}
           AT_USERNAME: ${{ secrets.AT_USERNAME }}
           AT_API_KEY: ${{ secrets.AT_API_KEY }}
+          MONITOR_TOKEN: ${{ secrets.MONITOR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
