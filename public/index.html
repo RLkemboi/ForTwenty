@@ -51,6 +51,11 @@
 @keyframes nudge { 50% { transform: translateY(4px); } }
 .cover { position: fixed; inset: 0; z-index: 20; clip-path: circle(0 at 50% 80%); pointer-events: none; }
 .clone { position: fixed; z-index: 25; margin: 0; pointer-events: none; will-change: transform; transform-origin: 50% 50%; }
+.tube .fl { animation: tfloat 5.5s ease-in-out infinite; transform-origin: 150px 200px; }
+.tube .tsh { animation: tshad 5.5s ease-in-out infinite; transform-origin: 150px 378px; }
+@keyframes tfloat { 0%,100% { transform: translateY(5px) rotate(-1.2deg); } 50% { transform: translateY(-9px) rotate(1.4deg); } }
+@keyframes tshad { 0%,100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(.78); opacity: .65; } }
+@media (prefers-reduced-motion: reduce) { .tube .fl, .tube .tsh { animation: none; } }
 .clone svg, .clone img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .detail { position: fixed; inset: 0; z-index: 28; opacity: 0; pointer-events: none; transition: opacity 360ms ease; touch-action: pan-y; }
 .detail.show { opacity: 1; pointer-events: auto; }
@@ -255,25 +260,28 @@ function shade(hex, amt) {
   const n = parseInt(m[1], 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v + amt * (amt < 0 ? v : 255 - v))));
   return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
 }
-// Stand-in pack art until real photos exist: a foil packet tinted with the flavour colour.
+// Stand-in product art until real photos exist: a tilted, floating cardboard tube tinted with the flavour colour.
 function packArt(f, cls) {
   if (f.image) return `<img class="${cls || ''}" src="${esc(f.image)}" alt="${esc(f.name)}">`;
-  const c = f.color || '#888', hi = shade(c, .35), lo = shade(c, -.45), id = 'g' + f.id + (cls || '');
-  return `<svg class="${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)} pack"><defs>
-    <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
-    <linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".3" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity=".0"/></linearGradient></defs>
-    <radialGradient id="${id}f" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".7"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
-    <linearGradient id="${id}r" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".06" stop-color="#fff" stop-opacity=".08"/><stop offset=".9" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient>
-    <ellipse cx="150" cy="380" rx="128" ry="14" fill="url(#${id}f)"/>
-    <path d="M56 40h188l12 20-8 280-10 24H62l-10-24-8-280z" fill="url(#${id})"/>
-    <path d="M56 40h188l12 20H44z" fill="#000" opacity=".3"/>
-    <g stroke="#000" stroke-opacity=".25" stroke-width="2">${Array.from({ length: 11 }, (_, k) => `<path d="M${60 + k * 17.5} 42v15"/>`).join('')}</g>
-    <path d="M44 60h212l-8 280-10 24H62l-10-24z" fill="url(#${id}s)"/>
-    <path d="M44 60h212l-8 280-10 24H62l-10-24z" fill="url(#${id}r)"/>
-    <circle cx="150" cy="212" r="46" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2"/>
-    <text x="150" y="226" text-anchor="middle" fill="#fff" font-family="Unbounded,Arial Black,sans-serif" font-weight="900" font-size="40">${esc(String(f.name).trim().charAt(0).toUpperCase())}</text>
-    <rect x="104" y="290" width="92" height="2" fill="#fff" fill-opacity=".55"/>
-    <rect x="124" y="302" width="52" height="2" fill="#fff" fill-opacity=".3"/>
+  const c = f.color || '#888', hi = shade(c, .42), mid = shade(c, .12), lo = shade(c, -.5), id = 't' + f.id + (cls || '');
+  const nm = esc(String(f.name).trim().toUpperCase().slice(0, 16));
+  return `<svg class="tube ${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)} pack"><defs>
+    <linearGradient id="${id}b" x1="0" x2="1"><stop offset="0" stop-color="${lo}"/><stop offset=".22" stop-color="${c}"/><stop offset=".4" stop-color="${hi}"/><stop offset=".62" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+    <linearGradient id="${id}l" x1="0" x2="1"><stop offset="0" stop-color="${shade(c, -.38)}"/><stop offset=".25" stop-color="${mid}"/><stop offset=".42" stop-color="${shade(c, .5)}"/><stop offset=".7" stop-color="${c}"/><stop offset="1" stop-color="${shade(c, -.45)}"/></linearGradient>
+    <radialGradient id="${id}t" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="${shade(c, .55)}"/><stop offset="1" stop-color="${c}"/></radialGradient>
+    <radialGradient id="${id}s" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
+    <ellipse class="tsh" cx="150" cy="378" rx="78" ry="9" fill="url(#${id}s)"/>
+    <g class="fl"><g transform="rotate(-24 150 200)">
+      <path d="M95 112V300a55 18 0 0 0 110 0V112z" fill="url(#${id}b)"/>
+      <path d="M91 112V152a59 19 0 0 0 118 0V112z" fill="url(#${id}l)"/>
+      <path d="M91 152a59 19 0 0 0 118 0" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="2.5"/>
+      <path d="M95 158a55 18 0 0 0 110 0v10a55 18 0 0 1-110 0z" fill="#000" opacity=".22"/>
+      <ellipse cx="150" cy="112" rx="59" ry="19" fill="url(#${id}t)"/>
+      <ellipse cx="150" cy="112" rx="59" ry="19" fill="none" stroke="#fff" stroke-opacity=".25"/>
+      <text transform="translate(158 280) rotate(-90)" fill="#fff" font-family="Unbounded,Arial Black,sans-serif" font-weight="900" font-size="${nm.length > 12 ? 11 : nm.length > 8 ? 15 : 22}" letter-spacing="${nm.length > 8 ? 2 : 3}">${nm}</text>
+      <rect x="165" y="190" width="14" height="1.6" fill="#fff" fill-opacity=".6"/><rect x="165" y="196" width="9" height="1.6" fill="#fff" fill-opacity=".35"/>
+      <path d="M104 170V296" stroke="#fff" stroke-opacity=".28" stroke-width="5" stroke-linecap="round"/>
+    </g></g>
   </svg>`;
 }
 
