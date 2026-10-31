@@ -17,7 +17,7 @@ crons = ["*/5 * * * *"]
 # go in .dev.vars locally and in `wrangler secret put` for production.
 [vars]
 PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval exist, then "daraja"
-SMS_MODE = "at"               # "mock" logs messages only; "at" sends through Africa's Talking (AT_ENV decides sandbox or live)
+SMS_MODE = "mock" # demo: texts are only recorded in the SMS log. Switch to "at" for live (see SMS_ALLOWLIST)
 DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account
 RIDER_MODE = "demo"           # DEMO: finding a rider always passes. Set "real" to use free/busy riders and the queue
