@@ -6,7 +6,8 @@ export async function sendSms(env, to, body) {
   let status = 'mock';
   if (env.SMS_MODE === 'at') {
     try {
-      const host = env.AT_ENV === 'sandbox' ? 'api.sandbox.africastalking.com' : 'api.africastalking.com';
+      // A sandbox login (username "sandbox") only works on AT's sandbox servers, whatever AT_ENV says.
+      const host = env.AT_ENV === 'sandbox' || env.AT_USERNAME === 'sandbox' ? 'api.sandbox.africastalking.com' : 'api.africastalking.com';
       const form = { username: env.AT_USERNAME, to: '+' + to, message: body };
       if (env.AT_SENDER_ID) form.from = env.AT_SENDER_ID; // only after the sender ID is registered and approved
       const res = await fetch('https://' + host + '/version1/messaging', {
