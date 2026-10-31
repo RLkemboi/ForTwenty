@@ -21,8 +21,11 @@ CREATE TABLE IF NOT EXISTS riders (
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
-  busy INTEGER NOT NULL DEFAULT 0
+  busy INTEGER NOT NULL DEFAULT 0,
+  token TEXT NOT NULL DEFAULT (lower(hex(randomblob(12)))),  -- private link /r/<token>
+  on_duty INTEGER NOT NULL DEFAULT 1                         -- the rider's own switch
 );
+CREATE UNIQUE INDEX IF NOT EXISTS riders_token ON riders(token);
 
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
@@ -42,7 +45,13 @@ CREATE TABLE IF NOT EXISTS orders (
   provider TEXT NOT NULL DEFAULT 'mpesa',   -- mpesa | airtel
   lat REAL,
   lng REAL,
-  ip TEXT
+  ip TEXT,
+  offered_to INTEGER,          -- rider currently holding an offer for this order
+  offer_expires INTEGER,
+  offer_round INTEGER NOT NULL DEFAULT 0,
+  declined_by TEXT NOT NULL DEFAULT '',  -- riders who declined or missed it this round
+  retry_at INTEGER,
+  alerted INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS orders_status ON orders(status, created_at);
 

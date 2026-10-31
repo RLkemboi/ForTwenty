@@ -1,5 +1,6 @@
 import { stkPush, queryStatus } from './payments.js';
 import { sendSms, retryFailed } from './sms.js';
+import { riderPage } from './riderPage.js';
 import { normalizePhone, phoneList } from './phone.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -19,7 +20,114 @@ const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
 
 const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n) => sendSms(env, n, msg, { force: true })));
 
+
+// ---------- Driver offers (RIDER_MODE=offers) ----------
+// A paid order is OFFERED to one free, on-duty rider at a time for 2 minutes. Accept = it is theirs.
+// Decline or no answer = next rider. When every free rider has had a turn, pause a minute and go round again (never gives up).
+const offerMs = (env) => Number(env.OFFER_SECONDS || 120) * 1000;        // how long one rider has to answer
+const roundPauseMs = (env) => Number(env.ROUND_PAUSE_SECONDS || 60) * 1000; // wait before going round the riders again
+const ALERT_AFTER_MS = 5 * 60 * 1000;
+const idList = (x) => String(x || '').split(',').filter(Boolean).map(Number);
+const riderCut = (env, total) => Math.round((total * Number(env.RIDER_CUT_PCT || 0)) / 100);
+const riderLink = (env, r) => env.PUBLIC_URL + '/r/' + r.token;
+const detailsSms = (env, o) => `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Call customer: +${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`;
+
+async function offerOrder(env, orderId) {
+  const now = Date.now();
+  const o = await env.DB.prepare("SELECT id, address, total_kes, declined_by, retry_at FROM orders WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND (offered_to IS NULL OR offer_expires <= ?)").bind(orderId, now).first();
+  if (!o || (o.retry_at && o.retry_at > now)) return false;
+  // Free = admin-enabled, on duty, not on a delivery, and not already holding another live offer.
+  const free = (await env.DB.prepare("SELECT id, phone, token FROM riders r WHERE active = 1 AND on_duty = 1 AND busy = 0 AND NOT EXISTS (SELECT 1 FROM orders x WHERE x.offered_to = r.id AND x.status = 'paid' AND x.rider_id IS NULL AND x.offer_expires > ?) ORDER BY id").bind(now).all()).results;
+  if (!free.length) return false;
+  const declined = idList(o.declined_by);
+  const pick = free.find((r) => !declined.includes(r.id));
+  if (!pick) {
+    await env.DB.prepare("UPDATE orders SET declined_by = '', offer_round = offer_round + 1, retry_at = ? WHERE id = ?").bind(now + roundPauseMs(env), o.id).run();
+    return false;
+  }
+  const set = await env.DB.prepare("UPDATE orders SET offered_to = ?, offer_expires = ?, retry_at = NULL WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND (offered_to IS NULL OR offer_expires <= ?)").bind(pick.id, now + offerMs(env), o.id, now).run();
+  if (set.meta.changes !== 1) return false;
+  await sendSms(env, pick.phone, `New delivery offer: ${o.address}. You earn KSh ${riderCut(env, o.total_kes)}. Open within ${Math.round(offerMs(env) / 60000) || 1} min to accept: ${riderLink(env, pick)}`);
+  return true;
+}
+
+// Called by the 5-minute job, by rider page refreshes, and after every delivery / duty change.
+async function advanceQueue(env) {
+  const now = Date.now();
+  const lapsed = (await env.DB.prepare("SELECT id, offered_to, declined_by FROM orders WHERE status = 'paid' AND rider_id IS NULL AND offered_to IS NOT NULL AND offer_expires <= ?").bind(now).all()).results;
+  for (const l of lapsed) {
+    await env.DB.prepare("UPDATE orders SET declined_by = ?, offered_to = NULL, offer_expires = NULL WHERE id = ? AND offered_to = ?").bind([...idList(l.declined_by), l.offered_to].join(','), l.id, l.offered_to).run();
+  }
+  const waiting = (await env.DB.prepare("SELECT id, paid_at, alerted FROM orders WHERE status = 'paid' AND rider_id IS NULL AND offered_to IS NULL ORDER BY paid_at").all()).results;
+  for (const q of waiting) {
+    await offerOrder(env, q.id);
+    if (!q.alerted && now - q.paid_at > ALERT_AFTER_MS) {
+      const a = await env.DB.prepare('UPDATE orders SET alerted = 1 WHERE id = ? AND alerted = 0').bind(q.id).run();
+      if (a.meta.changes === 1) await alertOwners(env, 'Paid order ' + q.id + ' has no rider after 5 minutes. Riders are still being offered it; check /admin.');
+    }
+  }
+}
+
+async function acceptOffer(env, rider, orderId) {
+  const claim = await env.DB.prepare('UPDATE riders SET busy = 1 WHERE id = ? AND busy = 0').bind(rider.id).run();
+  if (claim.meta.changes !== 1) return { error: 'Finish your current delivery first.', code: 409 };
+  const set = await env.DB.prepare("UPDATE orders SET rider_id = ?, status = 'assigned', offered_to = NULL, offer_expires = NULL WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND offered_to = ? AND offer_expires > ?").bind(rider.id, orderId, rider.id, Date.now()).run();
+  if (set.meta.changes !== 1) {
+    await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(rider.id).run();
+    return { error: 'That offer expired or was taken.', code: 409 };
+  }
+  const o = await env.DB.prepare('SELECT address, phone, delivery_token, total_kes, lat, lng FROM orders WHERE id = ?').bind(orderId).first();
+  await sendSms(env, rider.phone, detailsSms(env, o));
+  return { ok: true };
+}
+
+async function declineOffer(env, rider, orderId) {
+  const o = await env.DB.prepare("SELECT declined_by FROM orders WHERE id = ? AND status = 'paid' AND rider_id IS NULL AND offered_to = ?").bind(orderId, rider.id).first();
+  if (!o) return false;
+  await env.DB.prepare('UPDATE orders SET declined_by = ?, offered_to = NULL, offer_expires = NULL WHERE id = ?').bind([...idList(o.declined_by), rider.id].join(','), orderId).run();
+  await offerOrder(env, orderId);
+  return true;
+}
+
+// Shared by the old per-order link and the rider page.
+async function completeDelivery(env, o) {
+  const done = await env.DB.prepare("UPDATE orders SET status = 'delivered', delivered_at = ? WHERE id = ? AND status = 'assigned'").bind(Date.now(), o.id).run();
+  if (done.meta.changes !== 1) return;
+  await env.DB.prepare('INSERT OR IGNORE INTO ledger (order_id, rider_id, amount_kes, created_at) VALUES (?, ?, ?, ?)').bind(o.id, o.rider_id, riderCut(env, o.total_kes), Date.now()).run();
+  await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(o.rider_id).run();
+  await sendSms(env, o.phone, `Order ${o.id} delivered. Thank you.`);
+  await dispatchQueue(env);
+}
+
+// Gives waiting paid orders to riders, the way the current RIDER_MODE does it.
+async function dispatchQueue(env) {
+  if (env.RIDER_MODE === 'offers') return advanceQueue(env);
+  const next = await env.DB.prepare("SELECT id FROM orders WHERE status = 'paid' AND rider_id IS NULL ORDER BY paid_at LIMIT 1").first();
+  if (next) await assignRider(env, next.id);
+}
+
+const nairobiDayStart = () => { const t = Date.now() + 3 * 3600e3; return t - (t % 86400e3) - 3 * 3600e3; };
+
+async function riderState(env, rider) {
+  if (env.RIDER_MODE === 'offers') await advanceQueue(env);
+  const now = Date.now();
+  const fresh = await env.DB.prepare('SELECT id, name, on_duty, busy FROM riders WHERE id = ?').bind(rider.id).first();
+  const offer = await env.DB.prepare("SELECT o.id, o.address, o.total_kes, o.lat, o.lng, o.offer_expires, p.name AS product, o.qty FROM orders o JOIN products p ON p.id = o.product_id WHERE o.offered_to = ? AND o.status = 'paid' AND o.rider_id IS NULL AND o.offer_expires > ? LIMIT 1").bind(rider.id, now).first();
+  const active = await env.DB.prepare("SELECT o.id, o.address, o.phone, o.total_kes, o.lat, o.lng, o.qty, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id WHERE o.rider_id = ? AND o.status = 'assigned' ORDER BY o.paid_at LIMIT 1").bind(rider.id).first();
+  const start = nairobiDayStart();
+  const day = await env.DB.prepare('SELECT COUNT(*) AS n FROM orders WHERE rider_id = ? AND status = \'delivered\' AND delivered_at >= ?').bind(rider.id, start).first();
+  const earn = await env.DB.prepare('SELECT COALESCE(SUM(amount_kes), 0) AS k FROM ledger WHERE rider_id = ? AND created_at >= ?').bind(rider.id, start).first();
+  const owed = await env.DB.prepare('SELECT COALESCE(SUM(amount_kes), 0) AS k FROM ledger WHERE rider_id = ? AND paid_out = 0').bind(rider.id).first();
+  return {
+    name: fresh.name, on_duty: !!fresh.on_duty, busy: !!fresh.busy, mode: env.RIDER_MODE,
+    offer: offer ? { ...offer, cut_kes: riderCut(env, offer.total_kes), seconds_left: Math.max(0, Math.round((offer.offer_expires - now) / 1000)), map: offer.lat != null ? mapLink(offer.lat, offer.lng) : null } : null,
+    active: active ? { ...active, cut_kes: riderCut(env, active.total_kes), map: active.lat != null ? mapLink(active.lat, active.lng) : null } : null,
+    today: { deliveries: day.n, earned_kes: earn.k }, owed_kes: owed.k,
+  };
+}
+
 async function assignRider(env, orderId) {
+  if (env.RIDER_MODE === 'offers') return offerOrder(env, orderId);
   if (env.RIDER_MODE === 'demo') {
     // DEMO: finding a rider always succeeds. The first active rider takes every order and is never marked busy.
     const rider = await env.DB.prepare('SELECT id, phone FROM riders WHERE active = 1 ORDER BY id LIMIT 1').first();
@@ -178,8 +286,11 @@ async function reconcile(env) {
   }
   await retryFailed(env);
   // Paid orders still waiting for a rider.
-  const queued = await env.DB.prepare("SELECT id FROM orders WHERE status = 'paid' AND rider_id IS NULL ORDER BY paid_at").all();
-  for (const q of queued.results) if (!(await assignRider(env, q.id))) break;
+  if (env.RIDER_MODE === 'offers') await advanceQueue(env);
+  else {
+    const queued = await env.DB.prepare("SELECT id FROM orders WHERE status = 'paid' AND rider_id IS NULL ORDER BY paid_at").all();
+    for (const q of queued.results) if (!(await assignRider(env, q.id))) break;
+  }
 }
 
 const adminOk = (req, env) => env.ADMIN_TOKEN && req.headers.get('authorization') === 'Bearer ' + env.ADMIN_TOKEN;
@@ -271,22 +382,49 @@ export default {
       if (m && method === 'POST') {
         const o = await env.DB.prepare('SELECT * FROM orders WHERE delivery_token = ?').bind(m[1]).first();
         if (!o) return json({ error: 'Not found' }, 404);
-        const done = await env.DB.prepare("UPDATE orders SET status = 'delivered', delivered_at = ? WHERE id = ? AND status = 'assigned'").bind(Date.now(), o.id).run();
-        if (done.meta.changes === 1) {
-          const cut = Math.round((o.total_kes * Number(env.RIDER_CUT_PCT || 0)) / 100);
-          await env.DB.prepare('INSERT OR IGNORE INTO ledger (order_id, rider_id, amount_kes, created_at) VALUES (?, ?, ?, ?)').bind(o.id, o.rider_id, cut, Date.now()).run();
-          await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(o.rider_id).run();
-          await sendSms(env, o.phone, `Order ${o.id} delivered. Thank you.`);
-          const next = await env.DB.prepare("SELECT id FROM orders WHERE status = 'paid' AND rider_id IS NULL ORDER BY paid_at LIMIT 1").first();
-          if (next) await assignRider(env, next.id);
-        }
+        await completeDelivery(env, o);
         return json({ ok: true });
+      }
+
+      m = path.match(/^\/r\/([a-z0-9]+)$/);
+      if (m && method === 'GET') {
+        const r = await env.DB.prepare('SELECT name FROM riders WHERE token = ? AND active = 1').bind(m[1]).first();
+        return r ? html(riderPage(m[1], r.name)) : html('<p style="font-family:system-ui;padding:24px">Link not found. Ask the shop for a new one.</p>', 404);
+      }
+      m = path.match(/^\/api\/rider\/([a-z0-9]+)\/(state|duty|accept|decline|deliver)$/);
+      if (m) {
+        const rider = await env.DB.prepare('SELECT id, name, phone, token FROM riders WHERE token = ? AND active = 1').bind(m[1]).first();
+        if (!rider) return json({ error: 'Link not found' }, 404);
+        if (m[2] === 'state' && method === 'GET') return json(await riderState(env, rider));
+        if (method !== 'POST') return json({ error: 'Not found' }, 404);
+        const b = await req.json().catch(() => ({}));
+        if (m[2] === 'duty') {
+          const on = b.on ? 1 : 0;
+          await env.DB.prepare('UPDATE riders SET on_duty = ? WHERE id = ?').bind(on, rider.id).run();
+          if (!on) {
+            const held = await env.DB.prepare("SELECT id FROM orders WHERE offered_to = ? AND status = 'paid' AND rider_id IS NULL").bind(rider.id).first();
+            if (held) await declineOffer(env, rider, held.id);
+          } else if (env.RIDER_MODE === 'offers') await advanceQueue(env);
+          return json({ ok: true });
+        }
+        const orderId = String(b.order_id || '');
+        if (m[2] === 'accept') {
+          const r = await acceptOffer(env, rider, orderId);
+          return r.ok ? json({ ok: true }) : json({ error: r.error }, r.code);
+        }
+        if (m[2] === 'decline') { await declineOffer(env, rider, orderId); return json({ ok: true }); }
+        if (m[2] === 'deliver') {
+          const o = await env.DB.prepare("SELECT * FROM orders WHERE id = ? AND rider_id = ? AND status = 'assigned'").bind(orderId, rider.id).first();
+          if (!o) return json({ error: 'That delivery is not active.' }, 404);
+          await completeDelivery(env, o);
+          return json({ ok: true });
+        }
       }
 
       if (path.startsWith('/api/admin/')) {
         if (!adminOk(req, env)) return json({ error: 'Forbidden' }, 403);
         if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT o.id, o.status, o.total_kes, o.qty, o.phone, o.address, o.rider_id, o.mpesa_receipt, o.created_at, o.provider, o.lat, o.lng, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id ORDER BY o.created_at DESC LIMIT 100').all()).results);
-        if (path === '/api/admin/riders' && method === 'GET') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.active, r.busy, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results);
+        if (path === '/api/admin/riders' && method === 'GET') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.active, r.busy, r.on_duty, r.token, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results.map((r) => ({ ...r, link: riderLink(env, r) })));
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/settle$/);
         if (m && method === 'POST') {
           await env.DB.prepare('UPDATE ledger SET paid_out = 1 WHERE rider_id = ? AND paid_out = 0').bind(Number(m[1])).run();
@@ -297,8 +435,14 @@ export default {
           const name = String(b.name || '').trim(), phone = normalizePhone(b.phone);
           if (name.length < 2 || name.length > 40) return json({ error: 'Name must be 2 to 40 characters.' }, 400);
           if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
-          const r = await env.DB.prepare('INSERT INTO riders (name, phone) VALUES (?, ?)').bind(name, phone).run();
+          const r = await env.DB.prepare('INSERT INTO riders (name, phone, token) VALUES (?, ?, ?)').bind(name, phone, rid(16)).run();
           return json({ ok: true, id: r.meta.last_row_id });
+        }
+        m = path.match(/^\/api\/admin\/riders\/(\d+)\/reset-link$/);
+        if (m && method === 'POST') {
+          const t = rid(16);
+          const r = await env.DB.prepare('UPDATE riders SET token = ? WHERE id = ?').bind(t, Number(m[1])).run();
+          return r.meta.changes === 1 ? json({ ok: true, link: env.PUBLIC_URL + '/r/' + t }) : json({ error: 'Not found' }, 404);
         }
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/update$/);
         if (m && method === 'POST') {
