@@ -105,3 +105,6 @@ INSERT OR IGNORE INTO products (id, name, price_kes, flavor_id, size) VALUES
 INSERT OR IGNORE INTO riders (id, name, phone) VALUES (1, 'Demo rider 1', '254700000001'), (2, 'Demo rider 2', '254700000002');
 
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS auth_fail (ip TEXT NOT NULL, ts INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS auth_fail_ip ON auth_fail(ip, ts);

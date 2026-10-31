@@ -3,8 +3,27 @@ import { sendSms, retryFailed } from './sms.js';
 import { riderPage } from './riderPage.js';
 import { normalizePhone, phoneList } from './phone.js';
 
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
-const html = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
+// Every response from the worker carries these. (Static pages get theirs from public/_headers.)
+const SEC = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
+const PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', ...SEC } });
+const html = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...SEC } });
+// Compare secrets without stopping at the first wrong character (so response time reveals nothing).
+const enc = new TextEncoder();
+const safeEq = (a, b) => {
+  const x = enc.encode(String(a)), y = enc.encode(String(b));
+  let d = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] || 0) ^ (y[i] || 0);
+  return d === 0;
+};
+const bearerOk = (req, secret) => !!secret && safeEq(req.headers.get('authorization') || '', 'Bearer ' + secret);
+const clientIp = (req) => req.headers.get('cf-connecting-ip') || 'unknown';
+// 10 wrong attempts from one address in 15 minutes locks that address out for the rest of the window.
+async function isLocked(env, ip) {
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM auth_fail WHERE ip = ? AND ts > ?').bind(ip, Date.now() - 15 * 60 * 1000).first();
+  return r.n >= 10;
+}
+const noteFail = (env, ip) => env.DB.prepare('INSERT INTO auth_fail (ip, ts) VALUES (?, ?)').bind(ip, Date.now()).run();
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const rid = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => ALPHABET[b % ALPHABET.length]).join('');
 
@@ -161,9 +180,11 @@ async function assignRider(env, orderId) {
 }
 
 async function markPaid(env, order, receipt) {
-  // Only one caller can move awaiting_payment -> paid, so duplicate callbacks do nothing.
-  const res = await env.DB.prepare("UPDATE orders SET status = 'paid', paid_at = ?, mpesa_receipt = ? WHERE id = ? AND status = 'awaiting_payment'").bind(Date.now(), receipt, order.id).run();
+  // Only one caller can move an unpaid order to paid, so duplicate callbacks do nothing.
+  // Money in is the truth: an order we had already marked failed or expired is still paid if the money really arrived late.
+  const res = await env.DB.prepare("UPDATE orders SET status = 'paid', paid_at = ?, mpesa_receipt = ? WHERE id = ? AND status IN ('awaiting_payment', 'payment_failed', 'expired')").bind(Date.now(), receipt, order.id).run();
   if (res.meta.changes !== 1) return;
+  if (order.status !== 'awaiting_payment') await alertOwners(env, `Order ${order.id}: payment arrived late (it was marked ${order.status}). It has been recovered and is being delivered.`);
   await sendSms(env, order.phone, `Payment of KSh ${order.total_kes} received. Order ${order.id} is being assigned to a rider.`);
   await assignRider(env, order.id);
 }
@@ -174,14 +195,16 @@ export async function processCallback(env, body) {
   if (!cb || !cb.CheckoutRequestID) return { ok: false, reason: 'bad_body' };
   const order = await env.DB.prepare('SELECT * FROM orders WHERE checkout_request_id = ?').bind(cb.CheckoutRequestID).first();
   if (!order) return { ok: false, reason: 'unknown_order' };
-  if (order.status !== 'awaiting_payment') return { ok: true, reason: 'already_processed' };
-  if (Number(cb.ResultCode) !== 0) {
+  const succeeded = Number(cb.ResultCode) === 0;
+  if (succeeded && order.status === 'cancelled') { await alertOwners(env, `Order ${order.id} was cancelled but a payment of KSh ${order.total_kes} arrived. Refund it.`); return { ok: true, reason: 'paid_cancelled' }; }
+  if (order.status !== 'awaiting_payment' && !(succeeded && ['payment_failed', 'expired'].includes(order.status))) return { ok: true, reason: 'already_processed' };
+  if (!succeeded) {
     await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ? AND status = 'awaiting_payment'").bind(order.id).run();
     return { ok: true, reason: 'payment_failed' };
   }
   const items = Object.fromEntries(((cb.CallbackMetadata && cb.CallbackMetadata.Item) || []).map((i) => [i.Name, i.Value]));
   if (Number(items.Amount) !== order.total_kes) {
-    await env.DB.prepare("UPDATE orders SET status = 'amount_mismatch', mpesa_receipt = ? WHERE id = ? AND status = 'awaiting_payment'").bind(items.MpesaReceiptNumber || null, order.id).run();
+    await env.DB.prepare("UPDATE orders SET status = 'amount_mismatch', mpesa_receipt = ? WHERE id = ? AND status IN ('awaiting_payment', 'payment_failed', 'expired')").bind(items.MpesaReceiptNumber || null, order.id).run();
     await alertOwners(env, `Order ${order.id}: paid ${items.Amount} but total is ${order.total_kes}. Check and refund or fix.`);
     return { ok: true, reason: 'amount_mismatch' };
   }
@@ -196,7 +219,9 @@ export async function processAirtelCallback(env, body) {
   if (!t || !t.id) return { ok: false, reason: 'bad_body' };
   const order = await env.DB.prepare("SELECT * FROM orders WHERE checkout_request_id = ? AND provider = 'airtel'").bind(String(t.id)).first();
   if (!order) return { ok: false, reason: 'unknown_order' };
-  if (order.status !== 'awaiting_payment') return { ok: true, reason: 'already_processed' };
+  const aSuccess = t.status_code === 'TS';
+  if (aSuccess && order.status === 'cancelled') { await alertOwners(env, `Order ${order.id} was cancelled but a payment of KSh ${order.total_kes} arrived. Refund it.`); return { ok: true, reason: 'paid_cancelled' }; }
+  if (order.status !== 'awaiting_payment' && !(aSuccess && ['payment_failed', 'expired'].includes(order.status))) return { ok: true, reason: 'already_processed' };
   if (t.status_code === 'TF') {
     await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ? AND status = 'awaiting_payment'").bind(order.id).run();
     return { ok: true, reason: 'payment_failed' };
@@ -262,7 +287,7 @@ async function createOrder(env, req) {
     if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our Nakuru delivery area.' }, 400);
   }
   // With a map pin the landmark is optional; without one we need a written delivery spot.
-  let address = String(b.address || '').trim();
+  let address = String(b.address || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
   if (!address && lat !== null) address = 'Map pin only (no landmark)';
   if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters), or pin your location on the map.' }, 400);
   const qty = Number(b.qty);
@@ -283,6 +308,12 @@ async function createOrder(env, req) {
   const dq = deliveryQuote(env, lat, lng);
   if (!dq.ok) return json({ error: `That spot is about ${dq.km} km away. We deliver up to ${dq.max_km} km from the shop.` }, 400);
   const total = product.price_kes * qty + dq.fee_kes;
+  // A double tap or a retried request must not send two payment prompts: an identical unpaid order from the last few seconds is returned instead.
+  const dupMs = num(env.DEDUPE_SECONDS, 20) * 1000;
+  if (dupMs > 0) {
+    const dup = await env.DB.prepare("SELECT id, total_kes FROM orders WHERE phone = ? AND product_id = ? AND qty = ? AND total_kes = ? AND provider = ? AND address = ? AND status = 'awaiting_payment' AND created_at > ? ORDER BY created_at DESC LIMIT 1").bind(phone, product.id, qty, total, provider, address, Date.now() - dupMs).first();
+    if (dup) return json({ order_id: dup.id, total_kes: dup.total_kes, duplicate: true });
+  }
   const id = rid(10);
   await env.DB.prepare("INSERT INTO orders (id, product_id, qty, total_kes, phone, address, status, delivery_token, created_at, provider, lat, lng, ip, delivery_fee_kes, distance_km) VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?, ?, ?, ?, ?, ?)").bind(id, product.id, qty, total, phone, address, rid(24), Date.now(), provider, lat, lng, ip, dq.fee_kes, dq.km).run();
   try {
@@ -307,12 +338,13 @@ async function watchMonitor(env) {
 async function reconcile(env) {
   await watchMonitor(env);
   const now = Date.now();
-  const stale = await env.DB.prepare("SELECT * FROM orders WHERE status = 'awaiting_payment' AND checkout_request_id IS NOT NULL AND created_at < ?").bind(now - 2 * 60 * 1000).all();
+  const stale = await env.DB.prepare("SELECT * FROM orders WHERE status = 'awaiting_payment' AND created_at < ?").bind(now - 2 * 60 * 1000).all();
   for (const o of stale.results) {
     if (o.created_at < now - 30 * 60 * 1000) {
       await env.DB.prepare("UPDATE orders SET status = 'expired' WHERE id = ? AND status = 'awaiting_payment'").bind(o.id).run();
       continue;
     }
+    if (!o.checkout_request_id) continue; // the payment prompt was never sent; it expires after 30 minutes
     try {
       const r = await queryStatus(env, o);
       if (!r) continue;
@@ -321,6 +353,15 @@ async function reconcile(env) {
     } catch { /* try again next run */ }
   }
   await retryFailed(env);
+  // Housekeeping: free a rider marked busy with no active delivery (a crash between two writes), and forget old failed-login records.
+  await env.DB.prepare("UPDATE riders SET busy = 0 WHERE busy = 1 AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.rider_id = riders.id AND o.status = 'assigned')").run();
+  await env.DB.prepare('DELETE FROM auth_fail WHERE ts < ?').bind(now - 24 * 3600 * 1000).run();
+  // A delivery still open an hour after payment: tell the owner once.
+  const slow = (await env.DB.prepare("SELECT id FROM orders WHERE status = 'assigned' AND paid_at < ? AND alerted < 2").bind(now - 60 * 60 * 1000).all()).results;
+  for (const o of slow) {
+    const a = await env.DB.prepare('UPDATE orders SET alerted = 2 WHERE id = ? AND alerted < 2').bind(o.id).run();
+    if (a.meta.changes === 1) await alertOwners(env, `Order ${o.id} was paid over an hour ago and is not delivered. Check /admin and reassign or cancel it.`);
+  }
   // Paid orders still waiting for a rider.
   if (env.RIDER_MODE === 'offers') await advanceQueue(env);
   else {
@@ -329,7 +370,7 @@ async function reconcile(env) {
   }
 }
 
-const adminOk = (req, env) => env.ADMIN_TOKEN && req.headers.get('authorization') === 'Bearer ' + env.ADMIN_TOKEN;
+const adminOk = (req, env) => bearerOk(req, env.ADMIN_TOKEN);
 
 const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -351,12 +392,18 @@ export default {
     const method = req.method;
     try {
       if (path === '/api/health') {
-        await env.DB.prepare('INSERT OR REPLACE INTO health (id, ts) VALUES (1, ?)').bind(Date.now()).run();
-        const r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
+        // Prove the database is writable, but at most once every 10 seconds so this public URL cannot be used to burn write quota.
+        let r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
+        if (!r || Date.now() - r.ts > 10000) {
+          await env.DB.prepare('INSERT OR REPLACE INTO health (id, ts) VALUES (1, ?)').bind(Date.now()).run();
+          r = await env.DB.prepare('SELECT ts FROM health WHERE id = 1').first();
+        }
         return json({ ok: !!r, ts: r && r.ts });
       }
       if (path === '/api/monitor/beat' && method === 'POST') {
-        if (!env.MONITOR_TOKEN || req.headers.get('authorization') !== 'Bearer ' + env.MONITOR_TOKEN) return json({ error: 'Forbidden' }, 403);
+        const mip = clientIp(req);
+        if (await isLocked(env, mip)) return json({ error: 'Too many wrong attempts.' }, 429);
+        if (!bearerOk(req, env.MONITOR_TOKEN)) { await noteFail(env, mip); return json({ error: 'Forbidden' }, 403); }
         const b = await req.json().catch(() => ({}));
         const prev = await env.DB.prepare('SELECT stale_alerted FROM monitor_beat WHERE id = 1').first();
         await env.DB.prepare('INSERT INTO monitor_beat (id, ts, ok, detail, stale_alerted) VALUES (1, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, ok = excluded.ok, detail = excluded.detail, stale_alerted = 0').bind(Date.now(), b.ok ? 1 : 0, String(b.detail || '').slice(0, 200)).run();
@@ -390,14 +437,14 @@ export default {
 
       m = path.match(/^\/api\/mpesa\/callback\/(.+)$/);
       if (m && method === 'POST') {
-        if (!env.CALLBACK_SECRET || m[1] !== env.CALLBACK_SECRET) return json({ error: 'Forbidden' }, 403);
+        if (!env.CALLBACK_SECRET || !safeEq(m[1], env.CALLBACK_SECRET)) return json({ error: 'Forbidden' }, 403);
         await processCallback(env, await req.json().catch(() => null));
         return json({ ResultCode: 0, ResultDesc: 'Accepted' });
       }
 
       m = path.match(/^\/api\/airtel\/callback\/(.+)$/);
       if (m && method === 'POST') {
-        if (!env.CALLBACK_SECRET || m[1] !== env.CALLBACK_SECRET) return json({ error: 'Forbidden' }, 403);
+        if (!env.CALLBACK_SECRET || !safeEq(m[1], env.CALLBACK_SECRET)) return json({ error: 'Forbidden' }, 403);
         await processAirtelCallback(env, await req.json().catch(() => null));
         return json({ ok: true });
       }
@@ -465,7 +512,9 @@ export default {
       }
 
       if (path.startsWith('/api/admin/')) {
-        if (!adminOk(req, env)) return json({ error: 'Forbidden' }, 403);
+        const ip = clientIp(req);
+        if (await isLocked(env, ip)) return json({ error: 'Too many wrong attempts. Try again in 15 minutes.' }, 429);
+        if (!adminOk(req, env)) { await noteFail(env, ip); return json({ error: 'Forbidden' }, 403); }
         if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT o.id, o.status, o.total_kes, o.qty, o.phone, o.address, o.rider_id, o.mpesa_receipt, o.created_at, o.paid_at, o.delivered_at, o.offered_to, o.offer_round, o.provider, o.lat, o.lng, p.name AS product, r.name AS rider_name FROM orders o JOIN products p ON p.id = o.product_id LEFT JOIN riders r ON r.id = o.rider_id ORDER BY o.created_at DESC LIMIT 100').all()).results);
         if (path === '/api/admin/riders' && method === 'GET') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.active, r.busy, r.on_duty, r.token, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results.map((r) => ({ ...r, link: riderLink(env, r) })));
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/settle$/);
@@ -499,6 +548,25 @@ export default {
           if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
           await env.DB.prepare('UPDATE riders SET name = ?, phone = ?, active = ? WHERE id = ?').bind(name, phone, active, cur.id).run();
           return json({ ok: true });
+        }
+        m = path.match(/^\/api\/admin\/orders\/([a-z0-9]+)\/(reassign|cancel)$/);
+        if (m && method === 'POST') {
+          const o = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(m[1]).first();
+          if (!o) return json({ error: 'Not found' }, 404);
+          if (o.status !== 'paid' && o.status !== 'assigned') return json({ error: 'Only paid orders that are not yet delivered can be changed.' }, 400);
+          const prev = o.rider_id, was = o.status;
+          if (m[2] === 'reassign') {
+            const skip = [...idList(o.declined_by), ...(prev ? [prev] : [])].join(',');
+            await env.DB.prepare("UPDATE orders SET status = 'paid', rider_id = NULL, offered_to = NULL, offer_expires = NULL, declined_by = ?, offer_round = 0, retry_at = NULL, alerted = 0 WHERE id = ? AND status IN ('paid', 'assigned')").bind(skip, o.id).run();
+            if (prev) await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(prev).run();
+            await dispatchQueue(env);
+            return json({ ok: true });
+          }
+          await env.DB.prepare("UPDATE orders SET status = 'cancelled', offered_to = NULL, offer_expires = NULL WHERE id = ? AND status IN ('paid', 'assigned')").bind(o.id).run();
+          if (prev) await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(prev).run();
+          await sendSms(env, o.phone, `Order ${o.id} was cancelled. If you were charged, we will refund you.`);
+          await dispatchQueue(env);
+          return json({ ok: true, refund: { order: o.id, phone: o.phone, amount_kes: o.total_kes, receipt: o.mpesa_receipt, was } });
         }
         if (path === '/api/admin/shop' && method === 'GET') return json(await shopStatus(env));
         if (path === '/api/admin/shop' && method === 'POST') {

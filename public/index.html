@@ -405,7 +405,7 @@ $('loc').onclick = () => {
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 };
 
-const FAILS = { payment_failed: 'The payment did not go through. Nothing was charged.', amount_mismatch: 'We received a different amount than expected. We will contact you by SMS.', expired: 'The payment prompt expired. Nothing was charged.' };
+const FAILS = { payment_failed: 'The payment did not go through. Nothing was charged.', amount_mismatch: 'We received a different amount than expected. We will contact you by SMS.', expired: 'The payment prompt expired. Nothing was charged.', cancelled: 'This order was cancelled. If you were charged, we will refund you.' };
 // state: sending | prompt | paid | assigned | delivered | payment_failed | amount_mismatch | expired
 let paidSeenAt = 0;
 function renderProg(state) {
@@ -418,7 +418,7 @@ function renderProg(state) {
     li.className = i < at ? 'done' : i === at ? 'active' : '';
   });
   if (state === 'delivered') $('s4').textContent = 'Delivered'; else if (state === 'assigned') $('s4').textContent = 'Rider is on the way'; else $('s4').textContent = state === 'paid' ? 'Finding a rider for you' : 'Rider assigned';
-  $('s2').textContent = failed ? (state === 'expired' ? 'Payment prompt expired' : 'Payment did not go through') : (state === 'sending' ? 'Sending the payment prompt' : state === 'prompt' ? 'Prompt sent. Enter your PIN on your phone' : 'Payment prompt sent to your phone');
+  $('s2').textContent = failed ? (state === 'expired' ? 'Payment prompt expired' : state === 'cancelled' ? 'Order cancelled' : 'Payment did not go through') : (state === 'sending' ? 'Sending the payment prompt' : state === 'prompt' ? 'Prompt sent. Enter your PIN on your phone' : 'Payment prompt sent to your phone');
   $('s3').textContent = state === 'paid' || state === 'assigned' || state === 'delivered' ? 'Payment confirmed' : 'Waiting for payment confirmation';
   $('pmsg').className = failed ? 'err' : '';
   if (state === 'paid') { if (!paidSeenAt) paidSeenAt = Date.now(); } else paidSeenAt = 0;
@@ -435,7 +435,7 @@ async function poll() {
   const s = r.data.status;
   renderProg(s === 'awaiting_payment' ? 'prompt' : s);
   if (s !== 'awaiting_payment') $('demo').style.display = 'none';
-  if (['delivered', 'payment_failed', 'amount_mismatch', 'expired'].includes(s)) clearInterval(timer);
+  if (['delivered', 'payment_failed', 'amount_mismatch', 'expired', 'cancelled'].includes(s)) clearInterval(timer);
 }
 
 $('f').onsubmit = async (e) => {
