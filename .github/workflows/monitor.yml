@@ -1,8 +1,7 @@
 name: Site monitor
 # Runs on GitHub, independent of Cloudflare. GitHub may start scheduled runs a few minutes late.
+# The scheduled run is retired: cron-job.org now does the outside monitoring (health ping + heartbeat). This can still be run by hand.
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch: {}
 permissions:
   issues: write

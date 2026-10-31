@@ -406,8 +406,6 @@ export default {
         if (!bearerOk(req, env.MONITOR_TOKEN)) {
           // Say what arrived (never the real token) so a wrong setup in the outside monitor can be fixed in one try.
           const ah = req.headers.get('authorization') || '';
-          const diag = { at: Date.now(), method: req.method, server_has_token: !!env.MONITOR_TOKEN, header_received: !!ah, starts_with_bearer: /^Bearer /.test(ah), token_length_received: ah.replace(/^Bearer /, '').length, has_angle_brackets: /[<>]/.test(ah), expected_length: String(env.MONITOR_TOKEN || '').length, ua: (req.headers.get('user-agent') || '').slice(0, 60) };
-          await env.DB.prepare("INSERT INTO settings (key, value) VALUES ('last_beat_reject', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(diag)).run();
           return json({ error: 'Forbidden', server_has_token: !!env.MONITOR_TOKEN, header_received: !!ah, starts_with_bearer: /^Bearer /.test(ah), token_length_received: ah.replace(/^Bearer /, '').length, has_angle_brackets: /[<>]/.test(ah), has_outer_space_or_quote: /^Bearer .*[\s"']$|^Bearer ["']/.test(ah) }, 403);
         }
         const b = await req.json().catch(() => ({}));
