@@ -423,7 +423,7 @@ export default {
 
       if (path.startsWith('/api/admin/')) {
         if (!adminOk(req, env)) return json({ error: 'Forbidden' }, 403);
-        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT o.id, o.status, o.total_kes, o.qty, o.phone, o.address, o.rider_id, o.mpesa_receipt, o.created_at, o.provider, o.lat, o.lng, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id ORDER BY o.created_at DESC LIMIT 100').all()).results);
+        if (path === '/api/admin/orders') return json((await env.DB.prepare('SELECT o.id, o.status, o.total_kes, o.qty, o.phone, o.address, o.rider_id, o.mpesa_receipt, o.created_at, o.paid_at, o.delivered_at, o.offered_to, o.offer_round, o.provider, o.lat, o.lng, p.name AS product, r.name AS rider_name FROM orders o JOIN products p ON p.id = o.product_id LEFT JOIN riders r ON r.id = o.rider_id ORDER BY o.created_at DESC LIMIT 100').all()).results);
         if (path === '/api/admin/riders' && method === 'GET') return json((await env.DB.prepare('SELECT r.id, r.name, r.phone, r.active, r.busy, r.on_duty, r.token, COALESCE(SUM(CASE WHEN l.paid_out = 0 THEN l.amount_kes END), 0) AS owed_kes FROM riders r LEFT JOIN ledger l ON l.rider_id = r.id GROUP BY r.id').all()).results.map((r) => ({ ...r, link: riderLink(env, r) })));
         m = path.match(/^\/api\/admin\/riders\/(\d+)\/settle$/);
         if (m && method === 'POST') {

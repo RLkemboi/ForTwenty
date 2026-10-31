@@ -20,7 +20,7 @@ PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval e
 SMS_MODE = "mock" # demo: texts are only recorded in the SMS log. Switch to "at" for live (see SMS_ALLOWLIST)
 DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account
-RIDER_MODE = "demo"           # DEMO: finding a rider always passes. Set "real" to use free/busy riders and the queue
+RIDER_MODE = "offers"         # live: paid orders are OFFERED to on-duty riders (accept/decline, 2-minute window). "demo" = auto-pass to rider 1; "real" = instant assignment, no accept
 ENABLED_PROVIDERS = "mpesa,airtel"  # remove "airtel" to hide it until the Airtel account is live
 AT_ENV = "live"               # "sandbox" = AT test servers (nothing reaches phones); "live" = real texts, needs a funded account
 SMS_ALLOWLIST = "254702581356,254712601406,254117795777,254794297971,254781812133,254757372270" # while payments are a demo, ONLY these numbers get real SMS. Delete this line when real payments go live

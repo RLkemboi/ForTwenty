@@ -30,6 +30,8 @@
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
   th { background: #fafafa; font-size: 12px; text-transform: uppercase; color: #555; }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eee; }
+  .track { display: flex; gap: 3px; margin-top: 6px; } .dot { width: 18px; height: 5px; border-radius: 3px; background: #ddd; } .dot.done { background: #1d7a46; } .dot.cur { background: #e0a800; } .dot.red { background: #c0152f; }
+  .stagenote { font-size: 12px; color: #666; margin-top: 3px; } .stagenote.red { color: #8a0018; font-weight: 600; }
   .pill.ok { background: #d9f2e6; color: #0b5d3b; } .pill.warn { background: #fff0c2; color: #7a5a00; } .pill.bad { background: #fbd9de; color: #8a0018; }
   .err { color: #b00020; } .muted { color: #666; font-size: 13px; }
   .form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 12px; margin-bottom: 10px; }
@@ -81,6 +83,30 @@ const pill = (s) => {
   return `<span class="pill ${cls}">${esc(String(s).split(' ')[0])}</span>`;
 };
 
+// Order progress: 1 Awaiting payment > 2 Payment confirmed > 3 Awaiting rider > 4 Rider en route > 5 Completed
+const STEPS = ['Awaiting payment', 'Payment confirmed', 'Awaiting rider', 'Rider en route', 'Order completed'];
+const RIDER_WAIT_MS = 2 * 60 * 1000;
+function stage(x) {
+  const now = Date.now();
+  if (x.status === 'awaiting_payment') return { step: 1, cls: 'warn', label: 'Awaiting payment', note: '' };
+  if (['payment_failed', 'expired', 'amount_mismatch'].includes(x.status)) return { step: 1, cls: 'bad', red: true, label: { payment_failed: 'Payment failed', expired: 'Payment expired', amount_mismatch: 'Wrong amount paid' }[x.status], note: x.status === 'amount_mismatch' ? 'Check the M-Pesa receipt' : '' };
+  if (x.status === 'paid') {
+    const mins = Math.max(0, Math.floor((now - (x.paid_at || x.created_at)) / 60000));
+    const available = data.riders.filter((r) => r.active && r.on_duty && !r.busy).length;
+    if (!available && !x.offered_to) return { step: 3, cls: 'bad', red: true, label: 'Driver not found', note: 'No riders available. Waiting ' + mins + ' min' };
+    if (now - (x.paid_at || x.created_at) > RIDER_WAIT_MS) return { step: 3, cls: 'bad', red: true, label: 'Rider yet to be found', note: 'Waiting ' + mins + ' min' + (x.offer_round ? ', round ' + (x.offer_round + 1) : '') };
+    return { step: 3, cls: 'warn', label: 'Awaiting rider', note: x.offered_to ? 'Offer sent to a rider' : 'Finding a rider' };
+  }
+  if (x.status === 'assigned') return { step: 4, cls: 'ok', label: 'Rider en route', note: x.rider_name ? esc(x.rider_name) : '' };
+  if (x.status === 'delivered') return { step: 5, cls: 'ok', label: 'Order completed', note: x.delivered_at ? when(x.delivered_at) : '' };
+  return { step: 0, cls: '', label: x.status, note: '' };
+}
+const progress = (x) => {
+  const g = stage(x);
+  const dots = STEPS.map((n, i) => `<span class="dot ${i + 1 < g.step || (i + 1 === g.step && g.step === 5) ? 'done' : i + 1 === g.step ? (g.red ? 'red' : 'cur') : ''}" title="${n}"></span>`).join('');
+  return `<span class="pill ${g.cls}">${esc(g.label)}</span><div class="track" aria-label="Step ${g.step} of 5">${dots}</div>${g.note ? `<div class="stagenote ${g.red ? 'red' : ''}">${g.note}</div>` : ''}`;
+};
+
 async function load() {
   const [o, r, s, bl, mo] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms'), call('/api/admin/blocked'), call('/api/admin/monitor')]);
   if (o.status === 403) { logout('That token is not correct.'); return false; }
@@ -102,7 +128,7 @@ function render() {
   const day = Date.now() - 24 * 3600 * 1000;
   const paidOrders = data.orders.filter((x) => ['paid', 'assigned', 'delivered'].includes(x.status));
   const paid24 = paidOrders.filter((x) => x.created_at > day);
-  const stuck = data.orders.filter((x) => x.status === 'paid' || x.status === 'amount_mismatch').length;
+  const stuck = data.orders.filter((x) => stage(x).red).length;
   const smsBad = data.sms.filter((m) => !['sent', 'mock'].includes(m.status) && m.created_at > day).length;
   const owed = data.riders.reduce((a, r) => a + (r.owed_kes || 0), 0);
   $('tiles').innerHTML = `
@@ -114,7 +140,7 @@ function render() {
     ${monitorTile()}`;
 
   $('t-orders').innerHTML = `<div class="tablewrap"><table><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Item</th><th>Paid with</th><th>Customer</th><th>Where</th><th>Rider</th><th></th></tr></thead><tbody>${
-    data.orders.map((x) => `<tr><td>${when(x.created_at)}</td><td class="mono">${esc(x.id)}</td><td>${pill(x.status)}</td><td>${esc(x.product)} x ${x.qty}<br><b>KSh ${x.total_kes}</b></td><td>${esc(x.provider === 'airtel' ? 'Airtel Money' : 'M-Pesa')}</td><td>+${esc(x.phone)}</td><td>${esc(x.address)}${x.lat != null ? `<br><a href="https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" rel="noopener">Map pin</a>` : ''}</td><td>${x.rider_id ? '#' + x.rider_id : ''}</td><td>${data.blocked.some((z) => z.phone === x.phone) ? '<span class="pill bad">blocked</span>' : `<button class="btn sm ghost" data-a="block" data-p="${esc(x.phone)}">Block</button>`}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No orders yet.</td></tr>'
+    data.orders.map((x) => `<tr><td>${when(x.created_at)}</td><td class="mono">${esc(x.id)}</td><td>${progress(x)}</td><td>${esc(x.product)} x ${x.qty}<br><b>KSh ${x.total_kes}</b></td><td>${esc(x.provider === 'airtel' ? 'Airtel Money' : 'M-Pesa')}</td><td>+${esc(x.phone)}</td><td>${esc(x.address)}${x.lat != null ? `<br><a href="https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" rel="noopener">Map pin</a>` : ''}</td><td>${x.rider_id ? esc(x.rider_name || '#' + x.rider_id) : ''}</td><td>${data.blocked.some((z) => z.phone === x.phone) ? '<span class="pill bad">blocked</span>' : `<button class="btn sm ghost" data-a="block" data-p="${esc(x.phone)}">Block</button>`}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No orders yet.</td></tr>'
   }</tbody></table></div>`;
 
   $('t-riders').innerHTML = `<form class="form" id="addr"><input id="rn" placeholder="Rider name" maxlength="40" required><input id="rp" placeholder="Phone, e.g. 0712 345 678" inputmode="tel" required><button class="btn" type="submit">Add rider</button></form><p id="rmsg" class="err" role="alert"></p>
