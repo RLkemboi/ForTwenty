@@ -293,7 +293,7 @@ async function createOrder(env, req) {
   if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters), or pin your location on the map.' }, 400);
   const qty = Number(b.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > 10) return json({ error: 'Quantity must be 1 to 10.' }, 400);
-  const product = await env.DB.prepare('SELECT id, price_kes FROM products WHERE id = ? AND active = 1').bind(Number(b.product_id)).first();
+  const product = await env.DB.prepare('SELECT id, price_kes FROM products WHERE id = ? AND active = 1 AND (flavor_id IS NULL OR flavor_id IN (SELECT id FROM flavors WHERE active = 1))').bind(Number(b.product_id)).first();
   if (!product) return json({ error: 'That item is not available.' }, 400);
   const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM orders WHERE phone = ? AND status = 'awaiting_payment' AND created_at > ?").bind(phone, Date.now() - 10 * 60 * 1000).first();
   if (recent.n >= 3) return json({ error: 'Too many unpaid orders. Please wait a few minutes.' }, 429);
@@ -428,7 +428,7 @@ export default {
         return json(fl.map((f) => ({ ...f, sizes: pr.filter((p) => p.flavor_id === f.id).map((p) => ({ product_id: p.id, size: p.size, price_kes: p.price_kes })) })).filter((f) => f.sizes.length));
       }
       if (path === '/api/products' && method === 'GET') {
-        const r = await env.DB.prepare('SELECT id, name, price_kes FROM products WHERE active = 1 ORDER BY id').all();
+        const r = await env.DB.prepare('SELECT id, name, price_kes FROM products WHERE active = 1 AND (flavor_id IS NULL OR flavor_id IN (SELECT id FROM flavors WHERE active = 1)) ORDER BY id').all();
         return json(r.results);
       }
       if (path === '/api/orders' && method === 'POST') return await createOrder(env, req);
@@ -572,6 +572,97 @@ export default {
           await dispatchQueue(env);
           return json({ ok: true, refund: { order: o.id, phone: o.phone, amount_kes: o.total_kes, receipt: o.mpesa_receipt, was } });
         }
+        // ----- Menu: the owner edits flavors, sizes, prices and availability here -----
+        const cleanName = (x, max) => String(x == null ? '' : x).replace(/[\u0000-\u001f\u007f<>]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, max);
+        const okPrice = (x) => Number.isInteger(x) && x >= 10 && x <= 50000;
+        const menuOut = async () => {
+          const fl = (await env.DB.prepare('SELECT id, name, blurb, color, sort, active FROM flavors ORDER BY sort, id').all()).results;
+          const pr = (await env.DB.prepare('SELECT id, name, flavor_id, size, price_kes, active FROM products WHERE flavor_id IS NOT NULL ORDER BY price_kes, id').all()).results;
+          return fl.map((f) => ({ ...f, products: pr.filter((p) => p.flavor_id === f.id) }));
+        };
+        if (path === '/api/admin/menu' && method === 'GET') return json(await menuOut());
+        if (path === '/api/admin/menu/flavor' && method === 'POST') {
+          const b = await req.json().catch(() => ({}));
+          const name = cleanName(b.name, 40), blurb = cleanName(b.blurb, 120), color = /^#[0-9a-fA-F]{6}$/.test(String(b.color || '')) ? b.color : '#444444';
+          const sizes = Array.isArray(b.sizes) ? b.sizes.slice(0, 6).map((z) => ({ size: cleanName(z && z.size, 20), price: Number(z && z.price_kes) })) : [];
+          if (!name) return json({ error: 'Give the flavor a name.' }, 400);
+          if (!sizes.length || sizes.some((z) => !z.size || !okPrice(z.price))) return json({ error: 'Add at least one size, each with a name and a price of KSh 10 to 50,000.' }, 400);
+          const n = (await env.DB.prepare('SELECT COUNT(*) AS n FROM flavors').first()).n;
+          if (n >= 40) return json({ error: 'The menu is full (40 flavors). Hide old ones instead.' }, 400);
+          if (await env.DB.prepare('SELECT id FROM flavors WHERE lower(name) = lower(?)').bind(name).first()) return json({ error: 'A flavor with that name already exists.' }, 400);
+          const mx = (await env.DB.prepare('SELECT COALESCE(MAX(sort), 0) AS m FROM flavors').first()).m;
+          const fr = await env.DB.prepare('INSERT INTO flavors (name, blurb, color, sort, active) VALUES (?, ?, ?, ?, 1)').bind(name, blurb, color, mx + 1).run();
+          const fid = fr.meta.last_row_id;
+          for (const z of sizes) await env.DB.prepare('INSERT INTO products (name, price_kes, flavor_id, size, active) VALUES (?, ?, ?, ?, 1)').bind(`${name}, ${z.size}`, z.price, fid, z.size).run();
+          return json({ ok: true, id: fid });
+        }
+        m = path.match(/^\/api\/admin\/menu\/flavor\/(\d+)$/);
+        if (m && method === 'POST') {
+          const f = await env.DB.prepare('SELECT * FROM flavors WHERE id = ?').bind(m[1]).first();
+          if (!f) return json({ error: 'Not found' }, 404);
+          const b = await req.json().catch(() => ({}));
+          const name = b.name !== undefined ? cleanName(b.name, 40) : f.name;
+          const blurb = b.blurb !== undefined ? cleanName(b.blurb, 120) : f.blurb;
+          const color = b.color !== undefined ? (/^#[0-9a-fA-F]{6}$/.test(String(b.color)) ? b.color : null) : f.color;
+          const active = b.active !== undefined ? (Number(b.active) ? 1 : 0) : f.active;
+          if (!name) return json({ error: 'The name cannot be empty.' }, 400);
+          if (!color) return json({ error: 'Pick a colour like #b3261e.' }, 400);
+          if (name.toLowerCase() !== f.name.toLowerCase() && await env.DB.prepare('SELECT id FROM flavors WHERE lower(name) = lower(?) AND id != ?').bind(name, f.id).first()) return json({ error: 'A flavor with that name already exists.' }, 400);
+          await env.DB.prepare('UPDATE flavors SET name = ?, blurb = ?, color = ?, active = ? WHERE id = ?').bind(name, blurb, color, active, f.id).run();
+          if (name !== f.name) await env.DB.prepare("UPDATE products SET name = ? || ', ' || COALESCE(size, '') WHERE flavor_id = ?").bind(name, f.id).run();
+          return json({ ok: true });
+        }
+        m = path.match(/^\/api\/admin\/menu\/flavor\/(\d+)\/size$/);
+        if (m && method === 'POST') {
+          const f = await env.DB.prepare('SELECT * FROM flavors WHERE id = ?').bind(m[1]).first();
+          if (!f) return json({ error: 'Not found' }, 404);
+          const b = await req.json().catch(() => ({}));
+          const size = cleanName(b.size, 20), price = Number(b.price_kes);
+          if (!size || !okPrice(price)) return json({ error: 'Give the size a name and a price of KSh 10 to 50,000.' }, 400);
+          const n = (await env.DB.prepare('SELECT COUNT(*) AS n FROM products WHERE flavor_id = ?').bind(f.id).first()).n;
+          if (n >= 8) return json({ error: 'That flavor already has 8 sizes.' }, 400);
+          if (await env.DB.prepare('SELECT id FROM products WHERE flavor_id = ? AND lower(size) = lower(?)').bind(f.id, size).first()) return json({ error: 'That flavor already has a size with that name.' }, 400);
+          await env.DB.prepare('INSERT INTO products (name, price_kes, flavor_id, size, active) VALUES (?, ?, ?, ?, 1)').bind(`${f.name}, ${size}`, price, f.id, size).run();
+          return json({ ok: true });
+        }
+        m = path.match(/^\/api\/admin\/menu\/product\/(\d+)$/);
+        if (m && method === 'POST') {
+          const p0 = await env.DB.prepare('SELECT * FROM products WHERE id = ? AND flavor_id IS NOT NULL').bind(m[1]).first();
+          if (!p0) return json({ error: 'Not found' }, 404);
+          const b = await req.json().catch(() => ({}));
+          const price = b.price_kes !== undefined ? Number(b.price_kes) : p0.price_kes;
+          const active = b.active !== undefined ? (Number(b.active) ? 1 : 0) : p0.active;
+          if (!okPrice(price)) return json({ error: 'The price must be a whole number from KSh 10 to 50,000.' }, 400);
+          await env.DB.prepare('UPDATE products SET price_kes = ?, active = ? WHERE id = ?').bind(price, active, p0.id).run();
+          return json({ ok: true });
+        }
+
+        // ----- Export: a spreadsheet file of orders, or of what each rider is owed -----
+        if (path === '/api/admin/export' && method === 'GET') {
+          const q = new URL(req.url).searchParams;
+          const day = (x, endOfDay) => { const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x || ''); if (!mm) return null; const t = Date.UTC(+mm[1], +mm[2] - 1, +mm[3]) - 3 * 3600e3; return Number.isNaN(t) ? null : endOfDay ? t + 86400e3 : t; };
+          const from = day(q.get('from'), false), to = day(q.get('to'), true);
+          if (from == null || to == null || to <= from) return json({ error: 'Pick a start and end date.' }, 400);
+          if (to - from > 366 * 86400e3) return json({ error: 'Pick a range of one year or less.' }, 400);
+          const cell = (v) => { let t = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+          const nai = (t) => (t ? new Date(t + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : '');
+          const rows = (await env.DB.prepare("SELECT o.id, o.status, o.qty, o.total_kes, o.delivery_fee_kes, o.distance_km, o.provider, o.mpesa_receipt, o.phone, o.address, o.created_at, o.paid_at, o.delivered_at, p.name AS product, r.name AS rider FROM orders o JOIN products p ON p.id = o.product_id LEFT JOIN riders r ON r.id = o.rider_id WHERE o.created_at >= ? AND o.created_at < ? ORDER BY o.created_at LIMIT 10000").bind(from, to).all()).results;
+          let out;
+          if (q.get('type') === 'payouts') {
+            const agg = new Map();
+            for (const o of rows.filter((x) => x.status === 'delivered' && x.rider)) {
+              const d = nai(o.delivered_at).slice(0, 10), k = d + '|' + o.rider, a = agg.get(k) || { d, rider: o.rider, n: 0, fee: 0 };
+              a.n++; a.fee += riderCut(env, o); agg.set(k, a);
+            }
+            out = ['Date,Rider,Deliveries,Owed (KSh)', ...[...agg.values()].sort((a, b) => (a.d + a.rider).localeCompare(b.d + b.rider)).map((a) => [a.d, a.rider, a.n, a.fee].map(cell).join(','))];
+          } else {
+            out = ['Order,Placed,Paid,Delivered,Status,Item,Qty,Total (KSh),Delivery fee (KSh),Distance (km),Paid with,M-Pesa receipt,Customer phone,Address,Rider',
+              ...rows.map((o) => [o.id, nai(o.created_at), nai(o.paid_at), nai(o.delivered_at), o.status, o.product, o.qty, o.total_kes, o.delivery_fee_kes || '', o.distance_km == null ? '' : o.distance_km, o.provider, o.mpesa_receipt || '', '+' + o.phone, o.address, o.rider || ''].map(cell).join(','))];
+          }
+          const name = (q.get('type') === 'payouts' ? 'rider-payouts-' : 'orders-') + q.get('from') + '_to_' + q.get('to') + '.csv';
+          return new Response('﻿' + out.join('\r\n') + '\r\n', { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}"`, ...SEC } });
+        }
+
         if (path === '/api/admin/shop' && method === 'GET') return json(await shopStatus(env));
         if (path === '/api/admin/shop' && method === 'POST') {
           const b = await req.json().catch(() => ({}));

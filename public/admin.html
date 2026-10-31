@@ -55,11 +55,22 @@
     <div class="tiles" id="tiles"></div>
     <nav id="tabs">
       <button data-t="orders" class="on">Orders</button>
+      <button data-t="menu">Menu</button>
       <button data-t="riders">Riders</button>
       <button data-t="sms">SMS log</button>
       <button data-t="blocked">Blocked</button>
     </nav>
-    <section id="t-orders"></section>
+    <section id="t-orders">
+      <form id="exportbar" class="tablewrap" style="padding:10px 12px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+        <label style="font-size:13px">From<br><input type="date" id="exf" required></label>
+        <label style="font-size:13px">To<br><input type="date" id="ext" required></label>
+        <button class="btn sm" type="submit" data-x="orders">Download orders (CSV)</button>
+        <button class="btn sm ghost" type="submit" data-x="payouts">Download rider payouts (CSV)</button>
+        <span id="exmsg" class="err" role="alert"></span>
+      </form>
+      <div id="ordersbody"></div>
+    </section>
+    <section id="t-menu" style="display:none"></section>
     <section id="t-riders" style="display:none"></section>
     <section id="t-sms" style="display:none"></section>
     <section id="t-blocked" style="display:none"></section>
@@ -70,7 +81,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let token = ''; try { token = sessionStorage.getItem('adm') || ''; } catch {}
-let data = { orders: [], riders: [], sms: [], blocked: [], monitor: { ts: null }, shop: { open: true } }, timer = null;
+let data = { orders: [], menu: [], riders: [], sms: [], blocked: [], monitor: { ts: null }, shop: { open: true } }, timer = null;
 
 async function call(path, body) {
   const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -109,9 +120,9 @@ const progress = (x) => {
 };
 
 async function load() {
-  const [o, r, s, bl, mo, sh] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms'), call('/api/admin/blocked'), call('/api/admin/monitor'), call('/api/admin/shop')]);
+  const [o, r, s, bl, mo, sh, mn] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms'), call('/api/admin/blocked'), call('/api/admin/monitor'), call('/api/admin/shop'), call('/api/admin/menu')]);
   if (o.status === 403) { logout('That token is not correct.'); return false; }
-  data = { orders: o.j || [], riders: r.j || [], sms: s.j || [], blocked: bl.j || [], monitor: mo.j || { ts: null }, shop: sh.j || { open: true } };
+  data = { orders: o.j || [], riders: r.j || [], sms: s.j || [], blocked: bl.j || [], monitor: mo.j || { ts: null }, shop: sh.j || { open: true }, menu: Array.isArray(mn.j) ? mn.j : [] };
   $('upd').textContent = 'Updated ' + new Date().toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   render();
   return true;
@@ -147,7 +158,8 @@ function render() {
     ${shopTile()}
     ${monitorTile()}`;
 
-  $('t-orders').innerHTML = `<div class="tablewrap"><table><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Item</th><th>Paid with</th><th>Customer</th><th>Where</th><th>Rider</th><th></th></tr></thead><tbody>${
+  if (!menuDirty) renderMenu();
+  $('ordersbody').innerHTML = `<div class="tablewrap"><table><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Item</th><th>Paid with</th><th>Customer</th><th>Where</th><th>Rider</th><th></th></tr></thead><tbody>${
     data.orders.map((x) => `<tr><td>${when(x.created_at)}</td><td class="mono">${esc(x.id)}</td><td>${progress(x)}</td><td>${esc(x.product)} x ${x.qty}<br><b>KSh ${x.total_kes}</b></td><td>${esc(x.provider === 'airtel' ? 'Airtel Money' : 'M-Pesa')}</td><td>+${esc(x.phone)}</td><td>${esc(x.address)}${x.lat != null ? `<br><a href="https://maps.google.com/?q=${x.lat},${x.lng}" target="_blank" rel="noopener">Map pin</a>` : ''}</td><td>${x.rider_id ? esc(x.rider_name || '#' + x.rider_id) : ''}</td><td style="white-space:nowrap">${(x.status === 'assigned' || x.status === 'paid') ? `<button class="btn sm ghost" data-a="reassign" data-id="${esc(x.id)}">Reassign</button> <button class="btn sm ghost" data-a="cancelorder" data-id="${esc(x.id)}">Cancel</button> ` : ''}${data.blocked.some((z) => z.phone === x.phone) ? '<span class="pill bad">blocked</span>' : `<button class="btn sm ghost" data-a="block" data-p="${esc(x.phone)}">Block</button>`}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No orders yet.</td></tr>'
   }</tbody></table></div>`;
 
@@ -167,10 +179,83 @@ function render() {
   }</tbody></table></div>`;
 }
 
+// ----- Menu -----
+let menuDirty = false;
+function renderMenu() {
+  const card = (f) => `<div class="tablewrap" style="padding:12px;margin-bottom:12px" data-f="${f.id}">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+      <label style="font-size:13px">Flavor<br><input data-k="name" value="${esc(f.name)}" maxlength="40"></label>
+      <label style="font-size:13px;flex:1;min-width:160px">Short description<br><input data-k="blurb" value="${esc(f.blurb)}" maxlength="120" style="width:100%"></label>
+      <label style="font-size:13px">Colour<br><input data-k="color" type="color" value="${esc(f.color)}"></label>
+      <button class="btn sm" type="button" data-m="saveflavor">Save</button>
+      <button class="btn sm ghost" type="button" data-m="toggleflavor" data-on="${f.active ? 1 : 0}">${f.active ? 'Hide from shop' : 'Show in shop'}</button>
+      ${f.active ? '' : '<span class="pill bad">hidden</span>'}
+    </div>
+    <table style="margin-top:8px"><thead><tr><th>Size</th><th>Price (KSh)</th><th></th></tr></thead><tbody>${f.products.map((p) => `<tr data-p="${p.id}"><td>${esc(p.size)}${p.active ? '' : ' <span class="pill bad">hidden</span>'}</td><td><input data-k="price" type="number" min="10" max="50000" step="1" value="${p.price_kes}" style="width:110px"></td><td style="white-space:nowrap"><button class="btn sm" type="button" data-m="saveprice">Save</button> <button class="btn sm ghost" type="button" data-m="toggleproduct" data-on="${p.active ? 1 : 0}">${p.active ? 'Hide' : 'Show'}</button></td></tr>`).join('')}
+      <tr data-addsize="${f.id}"><td><input data-k="size" placeholder="New size, e.g. 250g" maxlength="20" style="width:150px"></td><td><input data-k="price" type="number" min="10" max="50000" step="1" placeholder="Price" style="width:110px"></td><td><button class="btn sm ghost" type="button" data-m="addsize">Add size</button></td></tr>
+    </tbody></table></div>`;
+  $('t-menu').innerHTML = `<p class="muted">Changes apply to new orders straight away. Orders already placed keep the price they were charged. A hidden flavor or size disappears from the shop but stays here.</p>
+    ${data.menu.length ? data.menu.map(card).join('') : '<p class="muted">No flavors yet. Add the first one below.</p>'}
+    <div class="tablewrap" style="padding:12px" id="newflavor"><b>Add a new flavor</b>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-top:6px">
+        <label style="font-size:13px">Name<br><input data-k="name" maxlength="40"></label>
+        <label style="font-size:13px;flex:1;min-width:160px">Short description<br><input data-k="blurb" maxlength="120" style="width:100%"></label>
+        <label style="font-size:13px">Colour<br><input data-k="color" type="color" value="#444444"></label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-top:6px">
+        <label style="font-size:13px">Size 1<br><input data-k="s1" value="sample" maxlength="20" style="width:130px"></label>
+        <label style="font-size:13px">Price<br><input data-k="p1" type="number" min="10" max="50000" style="width:100px"></label>
+        <label style="font-size:13px">Size 2 (optional)<br><input data-k="s2" value="packet" maxlength="20" style="width:130px"></label>
+        <label style="font-size:13px">Price<br><input data-k="p2" type="number" min="10" max="50000" style="width:100px"></label>
+        <button class="btn sm" type="button" data-m="newflavor">Add flavor</button>
+      </div>
+      <p id="menumsg" class="err" role="alert"></p></div>`;
+  menuDirty = false;
+}
+$('t-menu').addEventListener('input', () => { menuDirty = true; });
+$('t-menu').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-m]'); if (!b) return;
+  const card = b.closest('[data-f]'), row = b.closest('[data-p]'), v = (root, k) => root.querySelector(`[data-k=${k}]`).value;
+  const fail = (msg) => { if (b.dataset.m === 'newflavor') $('menumsg').textContent = msg; else alert(msg); };
+  b.disabled = true; let r;
+  const m = b.dataset.m;
+  if (m === 'saveflavor') r = await call(`/api/admin/menu/flavor/${card.dataset.f}`, { name: v(card, 'name'), blurb: v(card, 'blurb'), color: v(card, 'color') });
+  else if (m === 'toggleflavor') {
+    if (b.dataset.on === '1' && !confirm('Hide this flavor from the shop? Customers will not be able to order it.')) { b.disabled = false; return; }
+    r = await call(`/api/admin/menu/flavor/${card.dataset.f}`, { active: b.dataset.on === '1' ? 0 : 1 });
+  }
+  else if (m === 'saveprice') r = await call(`/api/admin/menu/product/${row.dataset.p}`, { price_kes: Number(v(row, 'price')) });
+  else if (m === 'toggleproduct') r = await call(`/api/admin/menu/product/${row.dataset.p}`, { active: b.dataset.on === '1' ? 0 : 1 });
+  else if (m === 'addsize') { const ar = b.closest('[data-addsize]'); r = await call(`/api/admin/menu/flavor/${ar.dataset.addsize}/size`, { size: v(ar, 'size'), price_kes: Number(v(ar, 'price')) }); }
+  else if (m === 'newflavor') {
+    const nf = $('newflavor'), sizes = [{ size: v(nf, 's1'), price_kes: Number(v(nf, 'p1')) }];
+    if (v(nf, 's2').trim() || v(nf, 'p2')) sizes.push({ size: v(nf, 's2'), price_kes: Number(v(nf, 'p2')) });
+    r = await call('/api/admin/menu/flavor', { name: v(nf, 'name'), blurb: v(nf, 'blurb'), color: v(nf, 'color'), sizes });
+  }
+  if (!r || !r.ok) { b.disabled = false; fail((r && r.j && r.j.error) || 'That did not work.'); return; }
+  menuDirty = false; await load(); document.querySelector('#tabs [data-t=menu]').click();
+});
+
+// ----- Export -----
+(() => {
+  const nairobi = (d) => new Date(d.getTime() + 3 * 3600e3).toISOString().slice(0, 10);
+  $('ext').value = nairobi(new Date()); $('exf').value = nairobi(new Date(Date.now() - 6 * 86400e3));
+  $('exportbar').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = e.submitter && e.submitter.dataset.x === 'payouts' ? 'payouts' : 'orders', from = $('exf').value, to = $('ext').value;
+    $('exmsg').textContent = '';
+    const r = await fetch(`/api/admin/export?type=${type}&from=${from}&to=${to}`, { headers: { authorization: 'Bearer ' + token } });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); $('exmsg').textContent = j.error || 'Could not make the file.'; return; }
+    const url = URL.createObjectURL(await r.blob()), a = document.createElement('a');
+    a.href = url; a.download = (type === 'payouts' ? 'rider-payouts-' : 'orders-') + from + '_to_' + to + '.csv'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+})();
+
 $('tabs').onclick = (e) => {
   const b = e.target.closest('button'); if (!b) return;
   document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
-  for (const t of ['orders', 'riders', 'sms', 'blocked']) $('t-' + t).style.display = t === b.dataset.t ? '' : 'none';
+  for (const t of ['orders', 'menu', 'riders', 'sms', 'blocked']) $('t-' + t).style.display = t === b.dataset.t ? '' : 'none';
 };
 
 document.addEventListener('submit', async (e) => {
