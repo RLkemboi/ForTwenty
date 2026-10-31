@@ -3,14 +3,16 @@
 const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export const riderPage = (token, name) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Rider</title>
+<link rel="stylesheet" href="/theme.css">
 <style>
-*{box-sizing:border-box}body{font-family:system-ui,sans-serif;max-width:460px;margin:0 auto;padding:14px;color:#1a1a1a;background:#fafaf8}
-h1{font-size:20px;margin:2px 0}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
-.c{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px;margin:10px 0}.c>div{margin:8px 0}.c small{display:block;color:#666;font-size:12px}.c b{font-size:18px}
-.offer{border:2px solid #f0b400;background:#fffbea}.timer{font-size:28px;font-weight:700;text-align:center;margin:6px 0}
-button,.btn{display:block;width:100%;text-align:center;text-decoration:none;font:600 17px system-ui;border:0;border-radius:12px;padding:15px;margin:8px 0;cursor:pointer;color:#fff;background:#1d7a46}
-.no{background:#fff;color:#a22;border:1px solid #d99}.map{background:#2563c9}.call{background:#444}.sw{width:auto;padding:9px 16px;font-size:15px;margin:0;background:#888}.sw.on{background:#1d7a46}
-.muted{color:#666;font-size:14px;text-align:center}.err{color:#a22;text-align:center;min-height:20px}.row{display:flex;gap:10px}.row>div{flex:1}
+*{box-sizing:border-box}body{font-family:var(--body);max-width:460px;margin:0 auto;padding:16px 16px 40px;color:#fff;background:var(--bg)}
+h1{font:400 40px/1 var(--script);margin:2px 0}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.c{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}.c>div{margin:10px 0}.c small{display:block;color:var(--dim);font:500 10px/1.3 var(--wide);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}.c b{font:700 15px/1.4 var(--wide)}
+.offer{border:1px solid var(--warn);background:#16120a}.timer{font:900 34px/1 var(--wide);text-align:center;margin:8px 0}
+button,.btn{display:block;width:100%;text-align:center;text-decoration:none;font:700 13px/1.2 var(--wide);letter-spacing:.02em;border:0;border-radius:999px;padding:16px;margin:10px 0;cursor:pointer;color:#000;background:#fff}
+.no{background:transparent;color:var(--bad);border:1px solid #7a3340}.map{background:transparent;color:#fff;border:1px solid var(--line)}.call{background:transparent;color:#fff;border:1px solid var(--line)}.sw{width:auto;padding:10px 18px;font-size:11px;margin:0;background:transparent;color:var(--dim);border:1px solid var(--line)}.sw.on{background:#fff;color:#000;border-color:#fff}
+.muted{color:var(--dim);font-size:14px;text-align:center}.err{color:var(--bad);text-align:center;min-height:20px}.row{display:flex;gap:10px}.row>div{flex:1}
+button:disabled{opacity:.45}
 </style>
 <body><div class="top"><h1>Hi ${esc(name)}</h1><button id="duty" class="sw" type="button">...</button></div>
 <div id="offer"></div><div id="active"></div><div id="idle" class="muted"></div>

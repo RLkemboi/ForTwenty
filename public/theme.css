@@ -1,0 +1,7 @@
+/* Shared dark theme: fonts and tokens for every page outside the shop home */
+@font-face { font-family: Unbounded; font-weight: 700; font-display: swap; src: url(/vendor/fonts/unbounded-latin-700-normal.woff2) format('woff2'); }
+@font-face { font-family: Unbounded; font-weight: 900; font-display: swap; src: url(/vendor/fonts/unbounded-latin-900-normal.woff2) format('woff2'); }
+@font-face { font-family: Inter; font-weight: 400; font-display: swap; src: url(/vendor/fonts/inter-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: Inter; font-weight: 500; font-display: swap; src: url(/vendor/fonts/inter-latin-500-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Great Vibes'; font-weight: 400; font-display: swap; src: url(/vendor/fonts/great-vibes-latin-400-normal.woff2) format('woff2'); }
+:root { --bg: #050505; --panel: #0e0e0e; --field: #141414; --ink: #fff; --dim: #a6a6a6; --line: rgba(255,255,255,.16); --ok: #43d18a; --warn: #f0b400; --bad: #ff6b7d; --script: 'Great Vibes', 'Brush Script MT', cursive; --wide: Unbounded, 'Arial Black', system-ui, sans-serif; --body: Inter, system-ui, sans-serif; }

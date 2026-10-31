@@ -30,7 +30,6 @@
   #tips.open { display: block; }
   #tips ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
 
-  #closed { position: fixed; top: 56px; left: 0; right: 0; z-index: 9; }
 .rows { position: relative; z-index: 1; isolation: isolate; height: calc(100svh - 56px); overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; }
 .rows::-webkit-scrollbar { display: none; }
 .row { position: relative; height: calc(100svh - 56px); min-height: 520px; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
@@ -69,54 +68,68 @@
 @media (min-width: 900px) { .rail { --w: min(30vh, 290px); } .copy { left: 56px; bottom: 48px; } .ar.l { left: 24px; } .ar.r { right: 24px; } }
 @media (prefers-reduced-motion: reduce) { .scrollhint i { animation: none; } }
 
-  /* Order popup */
-  dialog { border: 0; border-radius: 16px; padding: 0; color: #1a1a1a; background: #fff; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
-  dialog::backdrop { background: rgba(0,0,0,.55); }
-  .pop { padding: 20px 18px 24px; }
+  /* Order popup (dark, same system as the rail) */
+  dialog { border: 1px solid var(--line); border-radius: 20px; padding: 0; color: #fff; background: #0b0b0b; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+  dialog::backdrop { background: rgba(0,0,0,.8); backdrop-filter: blur(3px); }
+  .pop { padding: 22px 20px 28px; }
   .pop .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .pop h3 { margin: 0; font-size: 20px; }
-  .x { border: 0; background: transparent; font-size: 28px; line-height: 1; cursor: pointer; padding: 0 4px; }
-  label { display: block; margin: 14px 0 4px; font-weight: 600; }
-  input[type=text], input[type=tel], input[type=number] { width: 100%; padding: 12px; font-size: 16px; }
-  .row2 { display: flex; gap: 8px; align-items: flex-start; margin-top: 14px; }
-  .row2 input { margin-top: 4px; }
-  .pay { width: 100%; padding: 14px; font-size: 17px; margin-top: 18px; cursor: pointer; }
+  .pop h3 { margin: 0; font: 400 44px/1 var(--script); }
+  #dsub { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .x { border: 0; background: transparent; color: #fff; font-size: 30px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  label { display: block; margin: 20px 0 8px; font: 500 10px/1.3 var(--wide); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  label small { font: 400 11px var(--body); letter-spacing: 0; text-transform: none; color: #8d8d8d; }
+  input[type=text], input[type=tel], input[type=number] { width: 100%; padding: 14px 14px; font: 400 16px var(--body); color: #fff; background: #141414; border: 1px solid var(--line); border-radius: 12px; }
+  input::placeholder { color: #6e6e6e; }
+  input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+  .row2 { display: flex; gap: 10px; align-items: flex-start; margin-top: 20px; }
+  .row2 input { margin-top: 3px; width: 18px; height: 18px; accent-color: #fff; }
+  .row2 label { margin: 0; font: 400 13px/1.4 var(--body); letter-spacing: 0; text-transform: none; color: #ddd; }
+  .pay { display: block; width: 100%; padding: 17px; margin-top: 20px; cursor: pointer; border: 0; border-radius: 999px; background: #fff; color: #000; font: 700 13px/1.2 var(--wide); letter-spacing: .03em; }
+  .pay:disabled { opacity: .45; cursor: default; }
+  .pay.ghost { background: transparent; color: #fff; border: 1px solid var(--line); margin-top: 10px; }
   .phone { display: flex; gap: 8px; }
   .phone #cc { width: 84px; flex: 0 0 84px; text-align: center; font-weight: 700; }
   .phone #ph { flex: 1; min-width: 0; }
-  .hint { font-size: 13px; color: #555; margin: 6px 0 0; min-height: 18px; }
+  .hint { font-size: 12px; color: #9a9a9a; margin: 8px 0 0; min-height: 18px; }
   .stepper { display: flex; align-items: center; gap: 8px; }
-  .stepper button { width: 48px; height: 48px; border-radius: 10px; border: 1px solid #bbb; background: #fff; font-size: 24px; cursor: pointer; }
+  .stepper button { width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: #fff; font-size: 22px; cursor: pointer; }
   .stepper input { width: 72px; text-align: center; font-weight: 700; -moz-appearance: textfield; }
   .stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  fieldset.provs { border: 0; padding: 0; margin: 14px 0 0; }
-  fieldset.provs legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+  fieldset.provs { border: 0; padding: 0; margin: 20px 0 0; }
+  fieldset.provs legend { padding: 0; margin-bottom: 8px; font: 500 10px/1.3 var(--wide); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
   .provs .opts { display: flex; gap: 8px; }
-  .provs label.opt { flex: 1; margin: 0; padding: 12px; border: 2px solid #ccc; border-radius: 10px; text-align: center; font-weight: 600; cursor: pointer; }
-  .provs label.opt:has(input:checked) { border-color: #1a1a1a; background: #f1f1ee; }
+  .provs label.opt { flex: 1; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; text-align: center; font: 700 12px/1.2 var(--wide); letter-spacing: .02em; text-transform: none; color: var(--dim); cursor: pointer; }
+  .provs label.opt:has(input:checked) { border-color: #fff; color: #fff; background: #151515; }
   .provs label.opt input { position: absolute; opacity: 0; pointer-events: none; }
-  .provs label.opt:has(input:focus-visible) { outline: 3px solid #1a73e8; outline-offset: 2px; }
-  #map { height: 220px; border-radius: 10px; border: 1px solid #ccc; margin-top: 8px; z-index: 0; }
-  .locbtn { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #1a1a1a; border-radius: 10px; background: #fff; cursor: pointer; margin-top: 4px; }
+  .provs label.opt:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
+  #map { height: 220px; border-radius: 12px; border: 1px solid var(--line); margin-top: 8px; z-index: 0; background: #111; }
+  .leaflet-tile-pane { filter: invert(.92) hue-rotate(180deg) brightness(.85) contrast(.95) saturate(.6); }
+  .leaflet-container { background: #111; font-family: var(--body); }
+  .leaflet-control-attribution { background: rgba(0,0,0,.65) !important; color: #aaa !important; } .leaflet-control-attribution a { color: #ddd !important; }
+  .locbtn { width: 100%; padding: 14px; font: 700 12px/1.2 var(--wide); letter-spacing: .02em; color: #fff; border: 1px solid var(--line); border-radius: 999px; background: transparent; cursor: pointer; margin-top: 4px; }
   #mapfail { display: none; }
   #msg { margin-top: 14px; min-height: 24px; }
-  ol.steps { list-style: none; margin: 18px 0 8px; padding: 0; }
-  ol.steps li { display: flex; gap: 12px; align-items: center; padding: 10px 0; color: #888; font-size: 16px; }
-  ol.steps li::before { content: ''; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc; flex: none; text-align: center; font-size: 14px; line-height: 18px; font-weight: 700; }
-  ol.steps li.active { color: #1a1a1a; font-weight: 600; }
-  ol.steps li.active::before { border-color: #1a1a1a; border-top-color: transparent; animation: spin 0.9s linear infinite; }
-  ol.steps li.done { color: #1a1a1a; }
-  ol.steps li.done::before { content: '\2713'; background: #1b7f5a; border-color: #1b7f5a; color: #fff; }
-  ol.steps li.failed { color: #b00020; font-weight: 600; }
-  ol.steps li.failed::before { content: '\00d7'; background: #b00020; border-color: #b00020; color: #fff; }
+  #total { margin: 18px 0 0; font: 700 13px/1.5 var(--wide); }
+  ol.steps { list-style: none; margin: 20px 0 8px; padding: 0; }
+  ol.steps li { display: flex; gap: 14px; align-items: center; padding: 12px 0; color: #777; font-size: 15px; border-bottom: 1px solid rgba(255,255,255,.07); }
+  ol.steps li::before { content: ''; width: 22px; height: 22px; border-radius: 50%; border: 1px solid #555; flex: none; text-align: center; font-size: 13px; line-height: 20px; font-weight: 700; }
+  ol.steps li.active { color: #fff; font-weight: 500; }
+  ol.steps li.active::before { border-color: #fff; border-top-color: transparent; animation: spin 0.9s linear infinite; }
+  ol.steps li.done { color: #fff; }
+  ol.steps li.done::before { content: '\2713'; background: #43d18a; border-color: #43d18a; color: #000; }
+  ol.steps li.failed { color: #ff8a98; font-weight: 500; }
+  ol.steps li.failed::before { content: '\00d7'; background: #ff6b7d; border-color: #ff6b7d; color: #000; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { ol.steps li.active::before { animation: none; border-top-color: #1a1a1a; } }
-  #pmsg { font-size: 16px; margin: 8px 0 0; }
-  .err { color: #b00020; }
-  .box { border: 1px solid #ccc; border-radius: 8px; padding: 14px; margin-top: 16px; }
-  .demo { background: #fff8e1; border-color: #e6c200; }
-  .demo button { width: 100%; margin-top: 8px; font-size: 15px; padding: 10px; cursor: pointer; }
-  #down { display: none; text-align: center; padding: 48px 16px; }
+  @media (prefers-reduced-motion: reduce) { ol.steps li.active::before { animation: none; border-top-color: #fff; } }
+  #pmsg { font-size: 15px; line-height: 1.5; margin: 12px 0 0; color: #e6e6e6; }
+  .err { color: #ff8a98; }
+  .box { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 18px; background: #101010; }
+  .box b { font: 700 14px/1.4 var(--wide); }
+  .demo { background: #14110a; border: 1px dashed #8a6d1d; color: #e8d9a8; }
+  .demo button { width: 100%; margin-top: 8px; font: 700 12px var(--wide); padding: 13px; cursor: pointer; border-radius: 999px; border: 1px solid #8a6d1d; background: transparent; color: #f2e4b4; }
+  .closedbar { position: fixed; top: 56px; left: 0; right: 0; z-index: 9; background: #3a0f16; color: #ffb3bd; padding: 11px 22px; font: 500 13px/1.4 var(--body); border-bottom: 1px solid #6b1c28; }
+  #down { display: none; text-align: center; padding: 18vh 24px; color: #ddd; line-height: 1.6; }
+  #down h2 { font: 400 52px/1 var(--script); color: #fff; margin: 0 0 12px; }
 </style>
 </head>
 <body>
@@ -131,7 +144,7 @@
     <span class="age">18+ ONLY</span>
     <button id="info" type="button" aria-label="How it works" aria-expanded="false" aria-controls="tips">i</button>
   </div>
-  <div id="closed" role="status" style="display:none;background:#fbd9de;color:#8a0018;padding:10px 14px;font-weight:600;font-size:14px"></div>
+  <div id="closed" class="closedbar" role="status" style="display:none"></div>
   <div id="tips" role="region" aria-label="How it works">
     <b>How it works</b>
     <ol>
@@ -159,7 +172,7 @@
 <dialog id="dlg" aria-labelledby="dt">
   <div class="pop">
     <div class="top">
-      <div><h3 id="dt">Your order</h3><div id="dsub" style="color:#555;margin-top:2px"></div></div>
+      <div><h3 id="dt">Your order</h3><div id="dsub"></div></div>
       <button class="x" id="close" type="button" aria-label="Close">&times;</button>
     </div>
     <form id="f">
@@ -182,20 +195,20 @@
         <input id="ph" type="tel" inputmode="numeric" placeholder="712 345 678" autocomplete="tel-national" aria-label="Phone number after the country code">
       </div>
       <p class="hint" id="phhint" aria-live="polite">Type it with or without the first 0, both work.</p>
-      <label for="ad">Landmark <span style="font-weight:400;color:#666">(optional once you pin below)</span></label>
+      <label for="ad">Landmark <small>(optional once you pin below)</small></label>
       <input id="ad" type="text" placeholder="Building, street, landmark (helps the rider)" autocomplete="street-address">
       <label id="maplabel" for="loc">Pin your spot on the map</label>
       <button class="locbtn" id="loc" type="button">Use my current location</button>
       <div id="map" role="application" aria-label="Map. Tap to drop a pin where the rider should come."></div>
       <p class="hint" id="pinhint" aria-live="polite">Or tap the map to drop a pin. You can drag the pin to fine tune it.</p>
       <p class="hint err" id="mapfail">The map could not load. Type your delivery spot above and we will still deliver.</p>
-      <div class="row2"><input id="age" type="checkbox"><label for="age" style="margin:0;font-weight:400">I confirm I am 18 years or older.</label></div>
-      <p id="total" style="margin:14px 0 0;font-weight:600"></p>
+      <div class="row2"><input id="age" type="checkbox"><label for="age">I confirm I am 18 years or older.</label></div>
+      <p id="total"></p>
       <button class="pay" id="go" type="submit">Pay with M-Pesa</button>
       <div id="cfm" class="box" style="display:none" role="alertdialog" aria-labelledby="cfmt">
-        <b id="cfmt" style="font-size:17px"></b>
-        <button class="pay" id="cfmy" type="button" style="background:#1a1a1a;color:#fff;border:0;border-radius:10px">Yes, send the prompt</button>
-        <button class="pay" id="cfmn" type="button" style="border:1px solid #1a1a1a;background:#fff;border-radius:10px;margin-top:8px">No, change the number</button>
+        <b id="cfmt"></b>
+        <button class="pay" id="cfmy" type="button">Yes, send the prompt</button>
+        <button class="pay ghost" id="cfmn" type="button">No, change the number</button>
       </div>
     </form>
     <div id="msg" role="status"></div>
@@ -615,6 +628,5 @@ function showClosed() { const b = $('closed'), c = config.shop && !config.shop.o
   } catch (e) { down(); }
 })();
 </script>
-<p style="text-align:center;font-size:13px;color:#666;margin:28px 0 20px"><a href="/privacy" style="color:inherit">Privacy notice</a> &middot; 18+ only</p>
 </body>
 </html>

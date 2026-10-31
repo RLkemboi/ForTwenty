@@ -5,39 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Admin</title>
-<style>
+<link rel="stylesheet" href="/theme.css"><style>
   * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f4f1; color: #1a1a1a; }
-  header { position: sticky; top: 0; z-index: 3; background: #1a1a1a; color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 10px; }
-  header b { flex: 1; }
-  header button { background: #333; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
-  main { max-width: 980px; margin: 0 auto; padding: 14px; }
-  #login { max-width: 360px; margin: 18vh auto; padding: 20px; background: #fff; border-radius: 14px; border: 1px solid #ddd; }
-  input, select { font-size: 16px; padding: 10px; border: 1px solid #bbb; border-radius: 8px; width: 100%; }
-  .btn { font-size: 16px; padding: 11px 16px; border: 0; border-radius: 8px; background: #1a1a1a; color: #fff; cursor: pointer; }
-  .btn.sm { font-size: 13px; padding: 6px 10px; }
-  .btn.ghost { background: #fff; color: #1a1a1a; border: 1px solid #bbb; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .tile { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 12px; }
-  .tile small { color: #666; display: block; }
-  .tile b { font-size: 22px; }
-  .tile.bad b { color: #b00020; }
-  nav { display: flex; gap: 6px; margin-bottom: 10px; }
-  nav button { flex: 1; padding: 10px; border: 1px solid #bbb; background: #fff; border-radius: 8px; font-size: 15px; cursor: pointer; }
-  nav button.on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
-  .tablewrap { overflow-x: auto; background: #fff; border: 1px solid #ddd; border-radius: 12px; }
+  body { font-family: var(--body); margin: 0; background: var(--bg); color: #eee; }
+  header { position: sticky; top: 0; z-index: 3; background: #000; border-bottom: 1px solid var(--line); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  header b { flex: 1; font: 900 13px/1 var(--wide); letter-spacing: .14em; text-transform: uppercase; }
+  header button { background: transparent; color: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font: 700 11px var(--wide); cursor: pointer; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  #login { max-width: 360px; margin: 16vh auto; padding: 24px; background: var(--panel); border-radius: 18px; border: 1px solid var(--line); }
+  #login h2 { font: 400 44px/1 var(--script); }
+  label { font: 500 10px/1.3 var(--wide); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  input, select { font: 400 16px var(--body); padding: 11px; border: 1px solid var(--line); border-radius: 10px; width: 100%; background: var(--field); color: #fff; }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+  .btn { font: 700 12px/1.2 var(--wide); padding: 13px 18px; border: 0; border-radius: 999px; background: #fff; color: #000; cursor: pointer; }
+  .btn.sm { font-size: 11px; padding: 8px 13px; }
+  .btn.ghost { background: transparent; color: #fff; border: 1px solid var(--line); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .tile small { color: var(--dim); display: block; font: 500 10px/1.3 var(--wide); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+  .tile b { font: 900 22px var(--wide); }
+  .tile.bad b { color: var(--bad); }
+  nav { display: flex; gap: 6px; margin-bottom: 12px; }
+  nav button { flex: 1; padding: 11px 6px; border: 1px solid var(--line); background: transparent; color: var(--dim); border-radius: 999px; font: 700 11px var(--wide); cursor: pointer; }
+  nav button.on { background: #fff; color: #000; border-color: #fff; }
+  .tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-  th { background: #fafafa; font-size: 12px; text-transform: uppercase; color: #555; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eee; }
-  .track { display: flex; gap: 3px; margin-top: 6px; } .dot { width: 18px; height: 5px; border-radius: 3px; background: #ddd; } .dot.done { background: #1d7a46; } .dot.cur { background: #e0a800; } .dot.red { background: #c0152f; }
-  .stagenote { font-size: 12px; color: #666; margin-top: 3px; } .stagenote.red { color: #8a0018; font-weight: 600; }
-  .pill.ok { background: #d9f2e6; color: #0b5d3b; } .pill.warn { background: #fff0c2; color: #7a5a00; } .pill.bad { background: #fbd9de; color: #8a0018; }
-  .err { color: #b00020; } .muted { color: #666; font-size: 13px; }
-  .form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 12px; margin-bottom: 10px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08); vertical-align: top; }
+  th { background: #0a0a0a; font: 500 10px/1.3 var(--wide); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font: 700 10px var(--wide); background: #222; color: #ccc; }
+  .track { display: flex; gap: 3px; margin-top: 6px; } .dot { width: 18px; height: 5px; border-radius: 3px; background: #2a2a2a; } .dot.done { background: var(--ok); } .dot.cur { background: var(--warn); } .dot.red { background: var(--bad); }
+  .stagenote { font-size: 12px; color: var(--dim); margin-top: 3px; } .stagenote.red { color: var(--bad); font-weight: 600; }
+  .pill.ok { background: #0f2a1d; color: var(--ok); } .pill.warn { background: #2e2506; color: var(--warn); } .pill.bad { background: #36121a; color: var(--bad); }
+  .err { color: var(--bad); } .muted { color: var(--dim); font-size: 13px; }
+  .form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 10px; }
   @media (max-width: 560px) { .form { grid-template-columns: 1fr; } }
-  td .small-in { width: 100%; min-width: 110px; padding: 6px; font-size: 14px; }
-  .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-word; }
+  td .small-in { width: 100%; min-width: 110px; padding: 7px; font-size: 14px; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-word; color: #cfcfcf; }
 </style>
 </head>
 <body>
@@ -50,7 +53,7 @@
 </div>
 
 <div id="app" style="display:none">
-  <header><b>Admin</b><span class="muted" id="upd" style="color:#bbb"></span><button id="refresh" type="button">Refresh</button><button id="out" type="button">Log out</button></header>
+  <header><b>Admin</b><span class="muted" id="upd"></span><button id="refresh" type="button">Refresh</button><button id="out" type="button">Log out</button></header>
   <main>
     <div class="tiles" id="tiles"></div>
     <nav id="tabs">
@@ -136,7 +139,7 @@ function shopTile() {
 }
 function monitorTile() {
   const m = data.monitor;
-  if (!m || !m.ts) return '<div class="tile"><small>Outside monitor</small><b style="color:#7a5a00">Not reporting yet</b><small>Add MONITOR_TOKEN, then run it once</small></div>';
+  if (!m || !m.ts) return '<div class="tile"><small>Outside monitor</small><b style="color:var(--warn)">Not reporting yet</b><small>Add MONITOR_TOKEN, then run it once</small></div>';
   const mins = Math.round((Date.now() - m.ts) / 60000);
   const live = mins <= 15 && m.ok;
   return `<div class="tile ${live ? '' : 'bad'}"><small>Outside monitor</small><b>${live ? 'Live' : (m.ok ? 'Quiet' : 'Problem')}</b><small>${mins < 1 ? 'just now' : mins + ' min ago'}${m.ok ? '' : ': ' + esc(m.detail)}</small></div>`;

@@ -5,7 +5,7 @@ import { normalizePhone, phoneList } from './phone.js';
 
 // Every response from the worker carries these. (Static pages get theirs from public/_headers.)
 const SEC = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
-const PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const PAGE_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', ...SEC } });
 const html = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...SEC } });
 // Compare secrets without stopping at the first wrong character (so response time reveals nothing).
@@ -376,7 +376,7 @@ const adminOk = (req, env) => bearerOk(req, env.ADMIN_TOKEN);
 const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const deliveryPage = (o, token) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Delivery</title>
-<style>body{font-family:system-ui,sans-serif;max-width:440px;margin:0 auto;padding:16px;color:#1a1a1a;background:#fafaf8}h1{font-size:22px;margin:4px 0 14px}.c{background:#fff;border:1px solid #ddd;border-radius:14px;padding:14px 16px;margin:10px 0}.c small{display:block;color:#666;font-size:13px;margin-bottom:2px}.c b{font-size:18px}a.btn,button{display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none;font-size:18px;padding:16px;border-radius:12px;border:0;margin-top:10px;cursor:pointer}a.map{background:#1a73e8;color:#fff}a.call{background:#fff;color:#1a1a1a;border:2px solid #1a1a1a}button{background:#1b7f5a;color:#fff}button:disabled{opacity:.5}#m{font-size:17px;margin-top:12px;text-align:center}</style>
+<link rel="stylesheet" href="/theme.css"><style>*{box-sizing:border-box}body{font-family:var(--body);max-width:440px;margin:0 auto;padding:20px 18px 40px;color:#fff;background:var(--bg)}h1{font:400 46px/1 var(--script);margin:6px 0 18px}.c{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:10px 0}.c small{display:block;color:var(--dim);font:500 10px/1.3 var(--wide);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}.c b{font:700 16px/1.4 var(--wide)}a.btn,button{display:block;width:100%;text-align:center;text-decoration:none;font:700 13px/1.2 var(--wide);letter-spacing:.02em;padding:17px;border-radius:999px;border:0;margin-top:12px;cursor:pointer}a.map{background:transparent;color:#fff;border:1px solid var(--line)}a.call{background:transparent;color:#fff;border:1px solid var(--line)}button{background:#fff;color:#000}button:disabled{opacity:.45}#m{font-size:15px;margin-top:14px;text-align:center;color:#e6e6e6}</style>
 <body><h1>Delivery</h1>
 <div class="c"><small>Order</small><b>${esc(o.product)} x ${esc(o.qty)}</b></div>
 <div class="c"><small>Deliver to</small><b>${esc(o.address)}</b></div>
@@ -473,8 +473,8 @@ export default {
       m = path.match(/^\/d\/([a-z0-9]+)$/);
       if (m && method === 'GET') {
         const o = await env.DB.prepare('SELECT o.address, o.phone, o.total_kes, o.status, o.lat, o.lng, o.qty, p.name AS product FROM orders o JOIN products p ON p.id = o.product_id WHERE o.delivery_token = ?').bind(m[1]).first();
-        if (!o) return html('<p>Link not found.</p>', 404);
-        return html(o.status === 'delivered' ? '<meta name="viewport" content="width=device-width,initial-scale=1"><p style="font-family:system-ui;font-size:20px;padding:24px">Already marked delivered. Thank you.</p>' : deliveryPage(o, m[1]));
+        if (!o) return html('<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/theme.css"><body style="background:#050505;color:#ddd;margin:0"><p style="font:400 16px/1.6 var(--body);padding:28vh 24px 0;text-align:center">Link not found. Ask the shop for a new one.</p></body>', 404);
+        return html(o.status === 'delivered' ? '<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/theme.css"><body style="background:#050505;color:#fff;margin:0"><p style="font:400 44px/1.1 var(--script);padding:28vh 24px 0;text-align:center">Already marked delivered. Thank you.</p></body>' : deliveryPage(o, m[1]));
       }
 
       m = path.match(/^\/api\/deliver\/([a-z0-9]+)$/);
@@ -488,7 +488,7 @@ export default {
       m = path.match(/^\/r\/([a-z0-9]+)$/);
       if (m && method === 'GET') {
         const r = await env.DB.prepare('SELECT name FROM riders WHERE token = ? AND active = 1').bind(m[1]).first();
-        return r ? html(riderPage(m[1], r.name)) : html('<p style="font-family:system-ui;padding:24px">Link not found. Ask the shop for a new one.</p>', 404);
+        return r ? html(riderPage(m[1], r.name)) : html('<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/theme.css"><body style="background:#050505;color:#ddd;margin:0"><p style="font:400 16px/1.6 var(--body);padding:28vh 24px 0;text-align:center">Link not found. Ask the shop for a new one.</p></body>', 404);
       }
       m = path.match(/^\/api\/rider\/([a-z0-9]+)\/(state|duty|accept|decline|deliver)$/);
       if (m) {
