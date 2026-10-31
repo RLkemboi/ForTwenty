@@ -11,43 +11,71 @@
   body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #fafaf8; }
   .wrap { width: 100%; max-width: 460px; margin: 0 auto; padding: 0 16px; }
 
-  /* Slim top bar: the how-it-works information lives behind the (i) button */
-  .bar { position: sticky; top: 0; z-index: 5; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px; background: rgba(250,250,248,.92); backdrop-filter: blur(6px); border-bottom: 1px solid #eee; }
-  .bar b { font-size: 17px; }
-  .bar .age { margin-left: auto; font-size: 12px; font-weight: 700; border: 1px solid #1a1a1a; border-radius: 6px; padding: 2px 6px; }
-  .bar button { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #bbb; background: #fff; font-size: 16px; font-style: italic; font-family: Georgia, serif; cursor: pointer; }
-  #tips { display: none; position: absolute; top: 60px; right: 12px; width: min(300px, calc(100vw - 24px)); background: #fff; border: 1px solid #ccc; border-radius: 12px; padding: 14px 16px; box-shadow: 0 6px 24px rgba(0,0,0,.15); font-size: 14px; }
+  /* ---- Dark stage + flavour slider (bar.md: Panerai reference) ---- */
+  @font-face { font-family: Unbounded; font-weight: 700; font-display: swap; src: url(/vendor/fonts/unbounded-latin-700-normal.woff2) format('woff2'); }
+  @font-face { font-family: Unbounded; font-weight: 900; font-display: swap; src: url(/vendor/fonts/unbounded-latin-900-normal.woff2) format('woff2'); }
+  @font-face { font-family: Inter; font-weight: 400; font-display: swap; src: url(/vendor/fonts/inter-latin-400-normal.woff2) format('woff2'); }
+  @font-face { font-family: Inter; font-weight: 500; font-display: swap; src: url(/vendor/fonts/inter-latin-500-normal.woff2) format('woff2'); }
+  :root { --bg: #050505; --stage: #050505; --ink: #fff; --dim: #a6a6a6; --line: rgba(255,255,255,.16); --wide: Unbounded, 'Arial Black', system-ui, sans-serif; --body: Inter, system-ui, sans-serif; --ease: cubic-bezier(.65,0,.25,1); --t: 760ms; }
+  body { font-family: var(--body); margin: 0; color: var(--ink); background: var(--bg); }
+  .wrap { width: 100%; max-width: 460px; margin: 0 auto; padding: 0 16px; }
+
+  .bar { position: relative; z-index: 6; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 22px; background: #000; border-bottom: 1px solid var(--line); }
+  .bar b { font: 900 13px/1 var(--wide); letter-spacing: .14em; text-transform: uppercase; }
+  .bar .age { margin-left: auto; font: 700 10px/1 var(--wide); letter-spacing: .1em; color: var(--dim); }
+  .bar button { width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink); font: 500 17px/1 Inter, system-ui, sans-serif; cursor: pointer; padding: 0; }
+  #tips { display: none; position: absolute; top: 60px; right: 12px; z-index: 9; width: min(300px, calc(100vw - 24px)); background: #111; color: #ddd; border: 1px solid var(--line); padding: 14px 16px; font-size: 14px; }
   #tips.open { display: block; }
   #tips ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
 
-  /* Rows: samples first, packets when you scroll down */
-  section.row { min-height: calc(100svh - 56px); scroll-snap-align: start; display: flex; flex-direction: column; justify-content: center; padding: 20px 0 28px; }
-  h2 { font-size: 22px; margin: 0; }
-  h2 small { font-size: 15px; font-weight: 600; color: #555; margin-left: 6px; }
-  .sub { color: #555; margin: 4px 0 14px; }
-
-  .carousel { position: relative; }
-  .track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; gap: 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .track::-webkit-scrollbar { display: none; }
-  .card { flex: 0 0 100%; scroll-snap-align: center; border: 1px solid #ddd; border-radius: 14px; overflow: hidden; background: #fff; }
-  .card .art { height: 190px; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; color: #fff; }
-  .card .art .price { align-self: flex-end; background: rgba(0,0,0,.35); border-radius: 999px; padding: 4px 12px; font-size: 15px; font-weight: 700; }
-  .card .art .name { font-size: 28px; font-weight: 700; }
-  .card .body { padding: 16px; }
-  .card p { margin: 0 0 14px; color: #444; }
-  .order { width: 100%; padding: 14px; font-size: 17px; border: 0; border-radius: 10px; background: #1a1a1a; color: #fff; cursor: pointer; }
-  .nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
-  .nav button { width: 48px; height: 48px; border-radius: 50%; border: 1px solid #bbb; background: #fff; font-size: 20px; cursor: pointer; }
-  .nav .pp { width: 36px; height: 36px; font-size: 13px; margin-left: 10px; }
-  .mid { display: flex; align-items: center; }
-  .dots { display: flex; gap: 8px; }
-  .dots i { width: 9px; height: 9px; border-radius: 50%; background: #ccc; display: block; cursor: pointer; }
-  .dots i.on { background: #1a1a1a; }
-  .more { text-align: center; color: #666; font-size: 13px; margin-top: 18px; }
-  .note { font-size: 12px; color: #777; margin: 8px 0 32px; }
+  .hero { position: relative; height: calc(100svh - 56px); min-height: 560px; max-height: 920px; overflow: hidden; background: radial-gradient(ellipse 60% 32% at 50% 30%, #4d4d4d 0%, #1a1a1a 42%, #050505 72%, #000 100%); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+  .wipe { position: absolute; inset: 0; z-index: 2; clip-path: inset(0 0 0 100%); pointer-events: none; }
+  .strip { position: absolute; top: 0; right: 0; bottom: 0; width: 15%; z-index: 1; overflow: hidden; cursor: pointer; border: 0; padding: 0; }
+  .strip .peek { position: absolute; top: 18%; left: 12%; width: 150%; opacity: .95; }
+  .prod { position: absolute; z-index: 3; left: 50%; top: 5%; width: 62%; max-width: 330px; transform: translateX(-50%); aspect-ratio: 3 / 4; display: grid; place-items: center; pointer-events: none; }
+  .prod > * { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain; transition: opacity calc(var(--t) * .3) ease, transform var(--t) var(--ease), filter var(--t) ease; }
+  .prod .out { opacity: 0; transform: scale(.97); filter: blur(3px); }
+  .copy { position: absolute; z-index: 4; left: 22px; right: calc(15% + 14px); bottom: 74px; transition: opacity 220ms ease; }
+  .copy.hide { opacity: 0; }
+  .copy h1 { margin: 0; font: 900 clamp(26px, 8.4vw, 40px)/1.02 var(--wide); letter-spacing: .01em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .copy .spec { margin: 8px 0 0; font: 700 clamp(12px, 3.6vw, 15px)/1.2 var(--wide); letter-spacing: .04em; }
+  .copy hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+  .act { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; border: 0; border-radius: 999px; background: #fff; color: #000; padding: 15px 20px; cursor: pointer; text-align: left; font: inherit; }
+  .act b { font: 700 clamp(12px, 3.6vw, 15px)/1.2 var(--wide); letter-spacing: .02em; }
+  .act i { font-style: normal; font-size: 18px; line-height: 1; }
+  .copy .sub { margin: 10px 0 0; font: 400 12px/1.4 var(--body); color: var(--dim); }
+  .eyebrow { font: 500 10px/1 var(--wide); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin: 0 0 6px; }
+  .copy p.blurb { margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: #bdbdbd; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sizes { display: flex; gap: 22px; }
+  .sizes button { border: 0; background: transparent; color: var(--dim); padding: 10px 0; cursor: pointer; font: 500 10px/1 var(--wide); letter-spacing: .05em; border-bottom: 1px solid transparent; }
+  .sizes button[aria-pressed=true] { color: #fff; border-bottom-color: #fff; }
+  .sizeto { border: 0; background: transparent; color: var(--ink); padding: 8px 0; cursor: pointer; font: 500 10px/1 var(--wide); letter-spacing: .06em; display: inline-flex; align-items: center; gap: 10px; }
+  .pager { position: absolute; z-index: 5; left: 27px; bottom: 28px; display: flex; gap: 9px; align-items: center; }
+  .pager i::before { content: ''; position: absolute; inset: -18px -7px; }
+  .pager i { width: 4px; height: 4px; border-radius: 50%; background: #666; display: block; cursor: pointer; position: relative; }
+  .pager i.on { background: #fff; }
+  .pager i.on::after { content: ''; position: absolute; inset: -5px; border: 1px solid #fff; border-radius: 50%; }
+  .arrows { position: absolute; z-index: 5; right: calc(15% + 8px); bottom: 14px; display: flex; align-items: center; }
+  .arrows button { width: 48px; height: 48px; border: 0; background: transparent; color: #fff; cursor: pointer; padding: 0; display: grid; place-items: center; }
+  .arrows button svg { width: 11px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .arrows span { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+  .act:focus-visible { outline-color: #fff; outline-offset: 4px; }
+  .hero button:focus-visible, .bar button:focus-visible, .sizes button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  @media (min-width: 900px) {
+    .hero { max-height: none; background: radial-gradient(ellipse 34% 50% at 25% 50%, #4d4d4d 0%, #1a1a1a 42%, #050505 72%, #000 100%); }
+    .strip { width: 20%; }
+    .prod { left: 25%; top: 50%; width: 36%; max-width: 440px; transform: translate(-50%, -50%); }
+    .copy { left: auto; right: calc(20% + 56px); width: min(440px, 34%); bottom: auto; top: 50%; transform: translateY(-50%); }
+    .copy h1 { font-size: clamp(34px, 3.4vw, 54px); }
+    .pager { left: 49px; bottom: 36px; }
+    .arrows { right: calc(20% + 56px); bottom: 28px; }
+  }
+  .foot { padding: 18px 22px 28px; font-size: 12px; color: var(--dim); line-height: 1.5; max-width: 520px; }
+  .foot a { color: #bbb; }
+  @media (prefers-reduced-motion: reduce) { :root { --t: 1ms; } .copy { transition: none; } }
 
   /* Order popup */
-  dialog { border: 0; border-radius: 16px; padding: 0; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+  dialog { border: 0; border-radius: 16px; padding: 0; color: #1a1a1a; background: #fff; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
   dialog::backdrop { background: rgba(0,0,0,.55); }
   .pop { padding: 20px 18px 24px; }
   .pop .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
@@ -105,7 +133,7 @@
 <div id="app">
   <div class="bar">
     <b>Kabarak delivery</b>
-    <span class="age">18+ only</span>
+    <span class="age">18+ ONLY</span>
     <button id="info" type="button" aria-label="How it works" aria-expanded="false" aria-controls="tips">i</button>
   </div>
   <div id="closed" role="status" style="display:none;background:#fbd9de;color:#8a0018;padding:10px 14px;font-weight:600;font-size:14px"></div>
@@ -119,19 +147,25 @@
     </ol>
   </div>
 
-  <section class="row" id="row-sample" aria-labelledby="h-sample"><div class="wrap">
-    <h2 id="h-sample">Samples <small id="p-sample"></small></h2>
-    <p class="sub">A small roll to try.</p>
-    <div class="carousel" id="car-sample"></div>
-    <p class="more">Scroll down for packets &#8595;</p>
-  </div></section>
-
-  <section class="row" id="row-packet" aria-labelledby="h-packet"><div class="wrap">
-    <h2 id="h-packet">Packets <small id="p-packet"></small></h2>
-    <p class="sub">A full packet.</p>
-    <div class="carousel" id="car-packet"></div>
-    <p class="note">Privacy: we use your phone number and delivery spot only to take payment and deliver your order. Full privacy page coming before launch.</p>
-  </div></section>
+  <main class="hero" id="hero" aria-roledescription="carousel" aria-label="Shisha flavors">
+    <div class="wipe" id="wipe"></div>
+    <button class="strip" id="strip" type="button" aria-label="Next flavor"><div class="peek" id="peek"></div></button>
+    <div class="prod" id="prod"></div>
+    <div class="copy" id="copy" aria-live="polite">
+      <h1 id="h-name"></h1>
+      <p class="spec" id="h-spec"></p>
+      <hr>
+      <button class="act" id="h-order" type="button"><b id="h-act">Order now</b><i>&#8594;</i></button>
+      <p class="sub" id="h-sub">Delivered to Kabarak</p>
+      <hr>
+      <p class="eyebrow">Flavour notes</p>
+      <p class="blurb" id="h-blurb"></p>
+      <div class="sizes" id="h-sizes" role="group" aria-label="Choose size"></div>
+    </div>
+    <div class="pager" id="pager" role="tablist" aria-label="Choose flavor"></div>
+    <div class="arrows"><button id="prev" type="button" aria-label="Previous flavor"><svg viewBox="0 0 9 15"><path d="M8 1 1.5 7.5 8 14"/></svg></button><span></span><button id="next" type="button" aria-label="Next flavor"><svg viewBox="0 0 9 15"><path d="M1 1l6.5 6.5L1 14"/></svg></button></div>
+  </main>
+  <p class="foot">Privacy: we use your phone number and delivery spot only to take payment and deliver your order. <a href="/privacy.html">Privacy page</a></p>
 </div>
 
 <dialog id="dlg" aria-labelledby="dt">
@@ -213,69 +247,108 @@ async function api(path, opts) {
   return { ok: r.ok, status: r.status, data };
 }
 
-/* ---------- Infinite, auto-playing carousel ---------- */
-function makeCarousel(host, items, label) {
-  const n = items.length;
-  const slide = (it, clone) => `<article class="card" data-id="${it.f.id}" ${clone ? 'aria-hidden="true"' : ''} aria-label="${it.f.name}">
-      <div class="art" style="background:${it.f.color}"><span class="price">${KES(it.s.price_kes)}</span><span class="name">${it.f.name}</span></div>
-      <div class="body"><p>${it.f.blurb}</p><button class="order" type="button" ${clone ? 'tabindex="-1"' : ''}>Order ${it.f.name}</button></div></article>`;
-  host.innerHTML = `<div class="track" tabindex="0" aria-label="${label}, swipe to browse"></div>
-    <div class="nav"><button class="prev" type="button" aria-label="Previous flavor">&#8592;</button>
-      <div class="mid"><div class="dots"></div><button class="pp" type="button" aria-label="Pause automatic scrolling">&#10074;&#10074;</button></div>
-      <button class="next" type="button" aria-label="Next flavor">&#8594;</button></div>`;
-  const track = host.querySelector('.track'), dots = host.querySelector('.dots'), pp = host.querySelector('.pp');
-  // [clone of last] [real cards] [clone of first] makes the loop seamless
-  track.innerHTML = slide(items[n - 1], true) + items.map((it) => slide(it, false)).join('') + slide(items[0], true);
-  dots.innerHTML = items.map((_, i) => `<i data-i="${i}"></i>`).join('');
+/* ---------- Flavour slider: the product stays put and morphs; a colour strip wipes right to left ---------- */
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function shade(hex, amt) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#444';
+  const n = parseInt(m[1], 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v + amt * (amt < 0 ? v : 255 - v))));
+  return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
+}
+// Stand-in pack art until real photos exist: a foil packet tinted with the flavour colour.
+function packArt(f, cls) {
+  if (f.image) return `<img class="${cls || ''}" src="${esc(f.image)}" alt="${esc(f.name)}">`;
+  const c = f.color || '#888', hi = shade(c, .35), lo = shade(c, -.45), id = 'g' + f.id + (cls || '');
+  return `<svg class="${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)} pack"><defs>
+    <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+    <linearGradient id="${id}s" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".3" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity=".0"/></linearGradient></defs>
+    <radialGradient id="${id}f" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".7"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}r" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".06" stop-color="#fff" stop-opacity=".08"/><stop offset=".9" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient>
+    <ellipse cx="150" cy="380" rx="128" ry="14" fill="url(#${id}f)"/>
+    <path d="M56 40h188l12 20-8 280-10 24H62l-10-24-8-280z" fill="url(#${id})"/>
+    <path d="M56 40h188l12 20H44z" fill="#000" opacity=".3"/>
+    <g stroke="#000" stroke-opacity=".25" stroke-width="2">${Array.from({ length: 11 }, (_, k) => `<path d="M${60 + k * 17.5} 42v15"/>`).join('')}</g>
+    <path d="M44 60h212l-8 280-10 24H62l-10-24z" fill="url(#${id}s)"/>
+    <path d="M44 60h212l-8 280-10 24H62l-10-24z" fill="url(#${id}r)"/>
+    <circle cx="150" cy="212" r="46" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2"/>
+    <text x="150" y="226" text-anchor="middle" fill="#fff" font-family="Unbounded,Arial Black,sans-serif" font-weight="900" font-size="40">${esc(String(f.name).trim().charAt(0).toUpperCase())}</text>
+    <rect x="104" y="290" width="92" height="2" fill="#fff" fill-opacity=".55"/>
+    <rect x="124" y="302" width="52" height="2" fill="#fff" fill-opacity=".3"/>
+  </svg>`;
+}
 
-  const step = () => track.clientWidth + GAP;
-  const idx = () => Math.round(track.scrollLeft / step());
-  const jump = (i) => { track.style.scrollBehavior = 'auto'; track.scrollLeft = i * step(); track.style.scrollBehavior = ''; };
-  const go = (i) => track.scrollTo({ left: i * step() });
-  const real = () => (idx() - 1 + n) % n;
-  const syncDots = () => [...dots.children].forEach((d, i) => d.classList.toggle('on', i === real()));
+function makeSlider(items) {
+  const n = items.length, hero = $('hero');
+  let i = 0, size = 'sample', busy = false, wipeDir = 1;
+  const cur = () => items[i];
+  const sz = (it) => it.sizes[size] || it.sizes.sample || it.sizes.packet;
+  const other = () => (size === 'sample' ? 'packet' : 'sample');
+  $('pager').innerHTML = items.slice(0, 8).map((_, k) => `<i data-i="${k}" role="tab" aria-label="Flavor ${k + 1}"></i>`).join('');
+  $('prev').style.visibility = $('next').style.visibility = $('strip').style.display = n > 1 ? '' : 'none';
+  if (n < 2) $('strip').style.display = 'none';
 
-  let settle, visible = false, userPaused = false, holdUntil = 0;
-  track.addEventListener('scroll', () => {
-    requestAnimationFrame(syncDots);
-    clearTimeout(settle);
-    settle = setTimeout(() => { const i = idx(); if (i === 0) jump(n); else if (i === n + 1) jump(1); syncDots(); }, 140);
-  });
-  host.querySelector('.prev').onclick = () => { hold(); go(idx() - 1); };
-  host.querySelector('.next').onclick = () => { hold(); go(idx() + 1); };
-  dots.onclick = (e) => { const d = e.target.closest('i'); if (d) { hold(); go(Number(d.dataset.i) + 1); } };
-  pp.onclick = () => { userPaused = !userPaused; pp.innerHTML = userPaused ? '&#9654;' : '&#10074;&#10074;'; pp.setAttribute('aria-label', userPaused ? 'Resume automatic scrolling' : 'Pause automatic scrolling'); };
-  host.addEventListener('click', (e) => {
-    const card = e.target.closest('.card'); if (!card || !e.target.closest('.order')) return;
-    const it = items.find((x) => x.f.id === Number(card.dataset.id)); if (it) openOrder(it.f, it.s);
-  });
-
-  const hold = (ms = 5000) => { holdUntil = Date.now() + ms; };
-  host.addEventListener('pointerdown', () => hold());
-  host.addEventListener('touchstart', () => hold(), { passive: true });
-  host.addEventListener('focusin', () => { holdUntil = Infinity; });
-  host.addEventListener('focusout', () => hold(2000));
-  host.addEventListener('mouseenter', () => { holdUntil = Infinity; });
-  host.addEventListener('mouseleave', () => hold(2000));
-  new IntersectionObserver((es) => { visible = es[0].isIntersecting; }, { threshold: 0.5 }).observe(host);
-
-  if (!REDUCED) {
-    setInterval(() => {
-      if (visible && !userPaused && !document.hidden && !$('dlg').open && Date.now() > holdUntil) go(idx() + 1);
-    }, AUTOPLAY_MS);
-  } else { pp.style.display = 'none'; }
-
-  requestAnimationFrame(() => { jump(1); syncDots(); });
-  window.addEventListener('resize', () => { jump(idx() === 0 ? n : Math.min(idx(), n)); });
+  function fillCopy() {
+    const it = cur(), s = sz(it);
+    $('h-name').textContent = it.f.name;
+    $('h-spec').textContent = `${size === 'packet' ? 'PACKET' : 'SAMPLE'} · ${KES(s.price_kes)}`;
+    $('h-act').textContent = 'Order ' + it.f.name;
+    $('h-sub').textContent = `${size === 'packet' ? 'Packet' : 'Sample'} ${KES(s.price_kes)} \u00b7 Delivered to Kabarak`;
+    $('h-blurb').textContent = it.f.blurb || '';
+    $('h-order').setAttribute('aria-label', `Order ${it.f.name}, ${size}, ${KES(s.price_kes)}`);
+    $('h-sizes').innerHTML = ['sample', 'packet'].filter((k) => it.sizes[k]).map((k) => `<button type="button" data-s="${k}" aria-pressed="${k === size}">${k === 'packet' ? 'Packet' : 'Sample'} ${KES(it.sizes[k].price_kes)}</button>`).join('');
+    $('h-sizes').style.display = Object.keys(it.sizes).length > 1 ? '' : 'none';
+    [...$('pager').children].forEach((d, k) => { const on = k === i % 8; d.classList.toggle('on', on); d.setAttribute('aria-selected', on); });
+  }
+  function fillStage(first) {
+    const it = cur(), nx = items[(i + 1) % n];
+    $('prod').innerHTML = packArt(it.f, 'in');
+    $('peek').innerHTML = packArt(nx.f, 'pk');
+    $('strip').style.backgroundColor = nx.f.color || '#444';
+    $('strip').setAttribute('aria-label', 'Next flavor: ' + nx.f.name);
+    fillCopy();
+  }
+  async function move(dir) {
+    if (busy || n < 2) return; busy = true;
+    const to = (i + dir + n) % n, it = items[to], w = $('wipe'), copy = $('copy'), prod = $('prod');
+    wipeDir = dir; copy.classList.add('hide');
+    const old = prod.firstElementChild;
+    w.style.background = it.f.color || '#444';
+    const T = REDUCED ? 1 : 760;
+    // 1) colour sweeps across (always right to left for next, mirrored for previous)
+    w.style.transition = 'none'; w.style.clipPath = dir > 0 ? 'inset(0 0 0 100%)' : 'inset(0 100% 0 0)'; void w.offsetWidth;
+    w.style.transition = `clip-path ${T * .5}ms var(--ease)`; w.style.clipPath = 'inset(0)';
+    await new Promise((r) => setTimeout(r, T * .5));
+    // 2) swap under the colour; the product morphs in place (old fades and softens, new resolves)
+    if (old) old.classList.add('out');
+    i = to; const nx = items[(i + 1) % n];
+    prod.insertAdjacentHTML('beforeend', packArt(it.f, 'out'));
+    const fresh = prod.lastElementChild; void fresh.getBoundingClientRect(); fresh.classList.remove('out');
+    $('peek').innerHTML = packArt(nx.f, 'pk'); $('strip').style.backgroundColor = nx.f.color || '#444';
+    $('strip').setAttribute('aria-label', 'Next flavor: ' + nx.f.name);
+    fillCopy();
+    // 3) colour lifts away in the same direction, text returns
+    w.style.transition = `clip-path ${T * .5}ms var(--ease)`; w.style.clipPath = dir > 0 ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)';
+    setTimeout(() => copy.classList.remove('hide'), T * .25);
+    await new Promise((r) => setTimeout(r, T * .5));
+    if (old) old.remove();
+    busy = false;
+  }
+  $('next').onclick = $('strip').onclick = () => move(1);
+  $('prev').onclick = () => move(-1);
+  $('h-sizes').onclick = (e) => { const b = e.target.closest('button'); if (b && b.dataset.s !== size) { size = b.dataset.s; fillCopy(); } };
+  $('h-order').onclick = () => { const it = cur(); openOrder(it.f, sz(it)); };
+  $('pager').onclick = (e) => { const d = e.target.closest('i'); if (!d) return; const k = Number(d.dataset.i); if (k !== i) move(k > i ? 1 : -1).then(() => { /* single steps keep the motion simple */ }); };
+  document.addEventListener('keydown', (e) => { if (e.target.closest && e.target.closest('input, textarea, select, dialog')) return; if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); });
+  let x0 = null, y0 = 0;
+  hero.addEventListener('pointerdown', (e) => { if (e.target.closest('button, i')) return; x0 = e.clientX; y0 = e.clientY; });
+  hero.addEventListener('pointerup', (e) => { if (x0 == null) return; const dx = e.clientX - x0, dy = e.clientY - y0; x0 = null; if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.4) move(dx < 0 ? 1 : -1); });
+  hero.addEventListener('pointercancel', () => { x0 = null; });
+  fillStage(true);
 }
 
 function buildRows() {
-  for (const size of ['sample', 'packet']) {
-    const items = flavors.map((f) => ({ f, s: f.sizes.find((x) => x.size === size) })).filter((x) => x.s);
-    if (!items.length) { $('row-' + size).style.display = 'none'; continue; }
-    $('p-' + size).textContent = KES(items[0].s.price_kes) + ' each';
-    makeCarousel($('car-' + size), items, size === 'sample' ? 'Sample flavors' : 'Packet flavors');
-  }
+  const items = flavors.map((f) => ({ f, sizes: Object.fromEntries(f.sizes.map((s) => [s.size, s])) })).filter((x) => x.sizes.sample || x.sizes.packet);
+  if (!items.length) { $('hero').style.display = 'none'; return; }
+  makeSlider(items);
 }
 
 /* ---------- Info corner ---------- */
