@@ -27,4 +27,6 @@ SMS_ALLOWLIST = "254702581356,254712601406,254117795777,254794297971,25478181213
 ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is added when provided
 RIDER_CUT_PCT = "10"          # PLACEHOLDER: real rider cut not yet decided
 DELIVERY_FEE_KES = "0"        # PLACEHOLDER: delivery fee not yet decided
+OPEN_HOUR = "8"               # orders start at 8:00 am Nairobi time
+CLOSE_HOUR = "24"             # orders stop at midnight (24)
 PUBLIC_URL = "https://fortwenty.kipp-ralph.workers.dev"

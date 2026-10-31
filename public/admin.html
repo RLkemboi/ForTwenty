@@ -70,7 +70,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (x) => String(x == null ? '' : x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let token = ''; try { token = sessionStorage.getItem('adm') || ''; } catch {}
-let data = { orders: [], riders: [], sms: [], blocked: [], monitor: { ts: null } }, timer = null;
+let data = { orders: [], riders: [], sms: [], blocked: [], monitor: { ts: null }, shop: { open: true } }, timer = null;
 
 async function call(path, body) {
   const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
@@ -108,14 +108,20 @@ const progress = (x) => {
 };
 
 async function load() {
-  const [o, r, s, bl, mo] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms'), call('/api/admin/blocked'), call('/api/admin/monitor')]);
+  const [o, r, s, bl, mo, sh] = await Promise.all([call('/api/admin/orders'), call('/api/admin/riders'), call('/api/admin/sms'), call('/api/admin/blocked'), call('/api/admin/monitor'), call('/api/admin/shop')]);
   if (o.status === 403) { logout('That token is not correct.'); return false; }
-  data = { orders: o.j || [], riders: r.j || [], sms: s.j || [], blocked: bl.j || [], monitor: mo.j || { ts: null } };
+  data = { orders: o.j || [], riders: r.j || [], sms: s.j || [], blocked: bl.j || [], monitor: mo.j || { ts: null }, shop: sh.j || { open: true } };
   $('upd').textContent = 'Updated ' + new Date().toLocaleTimeString('en-KE', { timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   render();
   return true;
 }
 
+function shopTile() {
+  const sh = data.shop;
+  const label = sh.open ? 'Open' : (sh.reason === 'manual' ? 'Closed by you' : 'Closed (hours)');
+  const btn = sh.reason === 'hours' ? '<small>Opens 8:00 am, closes midnight</small>' : `<button class="btn sm ghost" data-a="shop" data-closed="${sh.open ? 1 : 0}">${sh.open ? 'Close the shop now' : 'Reopen the shop'}</button>`;
+  return `<div class="tile ${sh.open ? '' : 'bad'}"><small>Shop</small><b>${label}</b>${btn}</div>`;
+}
 function monitorTile() {
   const m = data.monitor;
   if (!m || !m.ts) return '<div class="tile"><small>Outside monitor</small><b style="color:#7a5a00">Not reporting yet</b><small>Add MONITOR_TOKEN, then run it once</small></div>';
@@ -137,6 +143,7 @@ function render() {
     <div class="tile ${stuck ? 'bad' : ''}"><small>Need attention</small><b>${stuck}</b></div>
     <div class="tile ${smsBad ? 'bad' : ''}"><small>Failed or blocked SMS, 24h</small><b>${smsBad}</b></div>
     <div class="tile"><small>Owed to riders</small><b>KSh ${owed}</b></div>
+    ${shopTile()}
     ${monitorTile()}`;
 
   $('t-orders').innerHTML = `<div class="tablewrap"><table><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Item</th><th>Paid with</th><th>Customer</th><th>Where</th><th>Rider</th><th></th></tr></thead><tbody>${
@@ -180,6 +187,8 @@ document.addEventListener('submit', async (e) => {
 });
 
 document.addEventListener('click', async (e) => {
+  const sb = e.target.closest('button[data-a=shop]');
+  if (sb) { const close = sb.dataset.closed === '1'; if (close && !confirm('Stop taking orders now? Customers will see a closed message until you reopen.')) return; sb.disabled = true; await call('/api/admin/shop', { closed: close }); await load(); return; }
   const b = e.target.closest('button[data-a]'); if (!b) return;
   if (b.dataset.a === 'block' || b.dataset.a === 'unblock') {
     const ph = b.dataset.p;

@@ -172,6 +172,21 @@ check('heartbeat accepted', (await (await post('/api/monitor/beat', { ok: true, 
 const mon = await get('/api/admin/monitor', ADMIN);
 check('admin monitor shows fresh beat', mon.ok === 1 && Math.abs(Date.now() - mon.ts) < 10000 && mon.stale_alerted === 0, JSON.stringify(mon));
 
+
+// ---- Opening hours / manual close (step 8). Run the server with OPEN_HOUR:0 CLOSE_HOUR:24 so this does not depend on the time of day ----
+const shopCfg = await get('/api/config');
+check('shop open by default', shopCfg.shop && shopCfg.shop.open === true, JSON.stringify(shopCfg.shop));
+check('shop switch needs admin token', (await post('/api/admin/shop', { closed: true })).status === 403);
+const cl = await (await post('/api/admin/shop', { closed: true }, ADMIN)).json();
+check('admin closes the shop', cl.ok && cl.open === false && cl.reason === 'manual', JSON.stringify(cl));
+const closedOrder = await order({ phone: '0733000001', address: 'Closed shop test street' });
+const closedBody = await closedOrder.json();
+check('order refused while closed', closedOrder.status === 403 && closedBody.closed === true && /not taking orders/.test(closedBody.error), JSON.stringify(closedBody));
+check('config tells the shop page it is closed', (await get('/api/config')).shop.open === false);
+const op = await (await post('/api/admin/shop', { closed: false }, ADMIN)).json();
+check('admin reopens the shop', op.ok && op.open === true);
+check('orders work again', (await order({ phone: '0733000002', address: 'Reopened shop test street' })).status === 200);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

@@ -211,9 +211,23 @@ export async function processAirtelCallback(env, body) {
   return { ok: true, reason: 'paid' };
 }
 
+// ---------- Opening hours ----------
+// Orders are taken from OPEN_HOUR to CLOSE_HOUR, Nairobi time (24 = midnight). The owner can also close the shop by hand from /admin.
+const hourLabel = (h) => (h % 24 === 0 ? 'midnight' : (h % 12 || 12) + ':00 ' + (h < 12 ? 'am' : 'pm'));
+async function shopStatus(env) {
+  const open = Number(env.OPEN_HOUR ?? 8), close = Number(env.CLOSE_HOUR ?? 24);
+  const hour = new Date(Date.now() + 3 * 3600e3).getUTCHours();
+  const manual = await env.DB.prepare("SELECT value FROM settings WHERE key = 'closed'").first();
+  if (manual && manual.value === '1') return { open: false, reason: 'manual', message: 'We are not taking orders right now. Please try again a little later.' };
+  if (hour < open || hour >= close) return { open: false, reason: 'hours', message: `We are closed. We take orders from ${hourLabel(open)} to ${hourLabel(close)}. Please come back then.` };
+  return { open: true, reason: null, message: '' };
+}
+
 async function createOrder(env, req) {
   let b;
   try { b = await req.json(); } catch { return json({ error: 'Invalid request' }, 400); }
+  const shop = await shopStatus(env);
+  if (!shop.open) return json({ error: shop.message, closed: true }, 403);
   if (b.age_confirmed !== true) return json({ error: 'You must confirm you are 18 or older.' }, 400);
   const phone = normalizePhone(b.phone);
   if (!phone) return json({ error: 'Enter a valid Kenyan phone number, like 0712345678.' }, 400);
@@ -327,7 +341,7 @@ export default {
         if (prev && prev.stale_alerted) await alertOwners(env, 'The outside site monitor is reporting again.');
         return json({ ok: true });
       }
-      if (path === '/api/config') return json({ payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0), providers: providersOn(env), area: AREA });
+      if (path === '/api/config') return json({ shop: await shopStatus(env), payments_mode: env.PAYMENTS_MODE, delivery_fee_kes: Number(env.DELIVERY_FEE_KES || 0), providers: providersOn(env), area: AREA });
       if (path === '/api/flavors' && method === 'GET') {
         const fl = (await env.DB.prepare('SELECT id, name, blurb, color FROM flavors WHERE active = 1 ORDER BY sort, id').all()).results;
         const pr = (await env.DB.prepare('SELECT id, flavor_id, size, price_kes FROM products WHERE active = 1 AND flavor_id IS NOT NULL ORDER BY price_kes').all()).results;
@@ -456,6 +470,12 @@ export default {
           if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
           await env.DB.prepare('UPDATE riders SET name = ?, phone = ?, active = ? WHERE id = ?').bind(name, phone, active, cur.id).run();
           return json({ ok: true });
+        }
+        if (path === '/api/admin/shop' && method === 'GET') return json(await shopStatus(env));
+        if (path === '/api/admin/shop' && method === 'POST') {
+          const b = await req.json().catch(() => ({}));
+          await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('closed', ?)").bind(b.closed ? '1' : '0').run();
+          return json({ ok: true, ...(await shopStatus(env)) });
         }
         if (path === '/api/admin/blocked' && method === 'GET') return json((await env.DB.prepare('SELECT phone, reason, created_at FROM blocked_phones ORDER BY created_at DESC').all()).results);
         if (path === '/api/admin/blocked' && method === 'POST') {

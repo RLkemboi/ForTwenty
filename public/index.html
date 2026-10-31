@@ -108,6 +108,7 @@
     <span class="age">18+ only</span>
     <button id="info" type="button" aria-label="How it works" aria-expanded="false" aria-controls="tips">i</button>
   </div>
+  <div id="closed" role="status" style="display:none;background:#fbd9de;color:#8a0018;padding:10px 14px;font-weight:600;font-size:14px"></div>
   <div id="tips" role="region" aria-label="How it works">
     <b>How it works</b>
     <ol>
@@ -295,6 +296,7 @@ function openOrder(flavor, size) {
   $('q').value = 1; phoneHint();
   showForm(); setupProviders();
   updateTotal();
+  if (config.shop && !config.shop.open) { $('msg').className = 'err'; $('msg').textContent = config.shop.message; $('go').disabled = true; }
   $('dlg').showModal();
   showMap();
 }
@@ -457,13 +459,17 @@ async function demo(result) {
 $('dpay').onclick = () => demo(0);
 $('dfail').onclick = () => demo(1032);
 
+function showClosed() { const b = $('closed'), c = config.shop && !config.shop.open; b.style.display = c ? '' : 'none'; if (c) b.textContent = config.shop.message; }
+
 /* ---------- Start ---------- */
 (async () => {
   try {
     const [h, f, c] = await Promise.all([api('/api/health'), api('/api/flavors'), api('/api/config')]);
     if (!h.ok || !h.data.ok || !f.ok || !f.data.length) throw new Error('unavailable');
     flavors = f.data; config = c.data;
+    showClosed();
     buildRows();
+    setInterval(async () => { const r = await api('/api/config'); if (r.ok) { config = r.data; showClosed(); } }, 5 * 60 * 1000);
   } catch (e) { down(); }
 })();
 </script>

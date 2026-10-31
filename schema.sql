@@ -101,3 +101,5 @@ INSERT OR IGNORE INTO products (id, name, price_kes, flavor_id, size) VALUES
   (5, 'Grape, sample', 100, 3, 'sample'), (6, 'Grape, packet', 600, 3, 'packet'),
   (7, 'Watermelon, sample', 100, 4, 'sample'), (8, 'Watermelon, packet', 600, 4, 'packet');
 INSERT OR IGNORE INTO riders (id, name, phone) VALUES (1, 'Demo rider 1', '254700000001'), (2, 'Demo rider 2', '254700000002');
+
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
