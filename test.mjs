@@ -87,17 +87,17 @@ const cfg = await get('/api/config');
 check('config lists both providers', Array.isArray(cfg.providers) && cfg.providers.includes('airtel') && cfg.providers.includes('mpesa'), JSON.stringify(cfg));
 check('unknown provider rejected', (await order({ phone: '0733000001', provider: 'paypal' })).status === 400);
 check('pin outside Nakuru rejected', (await order({ phone: '0733000002', lat: -1.286, lng: 36.817 })).status === 400);
-check('junk pin rejected', (await order({ phone: '0733000003', lat: 'abc', lng: 36.08 })).status === 400);
+check('junk pin rejected', (await order({ phone: '0733000003', lat: 'abc', lng: 35.966 })).status === 400);
 check('wrong airtel callback secret rejected', (await post('/api/airtel/callback/wrong', {})).status === 403);
 
 // Free both riders first so the Airtel order gets one straight away (deliver everything outstanding)
 for (let pass2 = 0; pass2 < 3; pass2++) {
   for (const m of await sms()) { const t = (m.body.match(/\/d\/([a-z0-9]+)/) || [])[1]; if (t) await post('/api/deliver/' + t); }
 }
-const air = await (await order({ phone: '0733000004', provider: 'airtel', product_id: 2, qty: 1, lat: -0.3031, lng: 36.08, address: 'Airtel test, Nakuru' })).json();
+const air = await (await order({ phone: '0733000004', provider: 'airtel', product_id: 2, qty: 1, lat: -0.1671, lng: 35.966, address: 'Airtel test, Nakuru' })).json();
 check('airtel order starts awaiting payment', (await status(air.order_id)) === 'awaiting_payment', JSON.stringify(air));
 const airRow = (await orders()).find((o) => o.id === air.order_id);
-check('airtel order stores provider and pin', airRow && airRow.provider === 'airtel' && Math.abs(airRow.lat + 0.3031) < 1e-6 && Math.abs(airRow.lng - 36.08) < 1e-6, JSON.stringify(airRow));
+check('airtel order stores provider and pin', airRow && airRow.provider === 'airtel' && Math.abs(airRow.lat + 0.1671) < 1e-6 && Math.abs(airRow.lng - 35.966) < 1e-6, JSON.stringify(airRow));
 // Airtel-style callback straight to the real endpoint: first one with TA (ambiguous) changes nothing
 const txId = 'mock_' + air.order_id;
 await post('/api/airtel/callback/dev-callback-secret', { transaction: { id: txId, status_code: 'TA' } });
@@ -119,10 +119,10 @@ check('airtel callback cannot pay an M-Pesa order', (await status(mp.order_id)) 
 
 // The rider SMS carries the map link when there is a pin
 const smsAll = await sms();
-check('rider SMS has map link', smsAll.some((m) => /maps\.google\.com\/\?q=-0\.303100,36\.080000/.test(m.body)), 'no map link in sms_log');
+check('rider SMS has map link', smsAll.some((m) => /maps\.google\.com\/\?q=-0\.167100,35\.966000/.test(m.body)), 'no map link in sms_log');
 
 // Address optional with a pin, required without
-check('pin only (no address) accepted', (await order({ phone: '0733000007', address: '', lat: -0.3031, lng: 36.08 })).status === 200);
+check('pin only (no address) accepted', (await order({ phone: '0733000007', address: '', lat: -0.1671, lng: 35.966 })).status === 200);
 check('no pin and no address rejected', (await order({ phone: '0733000008', address: '' })).status === 400);
 
 // ---- Admin: riders and rider page (step 5) ----
@@ -142,7 +142,7 @@ check('update unknown rider 404', (await postA('/api/admin/riders/9999/update', 
 const ord = (await orders()).find((o) => o.product);
 check('admin orders carry product name', !!ord && typeof ord.product === 'string', JSON.stringify(ord));
 // Rider page shows the item, a call link and escapes the address
-const xo = await (await order({ phone: '0733000009', address: '<b>x</b> Test', lat: -0.3031, lng: 36.08 })).json();
+const xo = await (await order({ phone: '0733000009', address: '<b>x</b> Test', lat: -0.1671, lng: 35.966 })).json();
 await pay(xo.order_id, { result: 0 });
 const tok2 = (await sms()).map((m) => (m.body.match(/\/d\/([a-z0-9]+)/) || [])[1]).filter(Boolean)[0];
 const page = await (await fetch(B + '/d/' + tok2)).text();

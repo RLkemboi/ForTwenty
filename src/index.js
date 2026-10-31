@@ -34,8 +34,8 @@ const mapLink = (lat, lng) => `https://maps.google.com/?q=${Number(lat).toFixed(
 // Providers the store accepts right now. Airtel stays off in production until its account is approved.
 const providersOn = (env) => String(env.ENABLED_PROVIDERS || 'mpesa').split(',').map((x) => x.trim()).filter(Boolean);
 
-// Placeholder service area around Nakuru town (roughly 25 km each way). Real delivery rules come later.
-const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
+// Outer box around Kabarak (about 11 km each way). The real limit is DELIVERY_MAX_KM from the shop.
+const AREA = { latMin: -0.27, latMax: -0.07, lngMin: 35.87, lngMax: 36.06 };
 
 const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n) => sendSms(env, n, msg, { force: true })));
 
@@ -249,11 +249,12 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 function deliveryQuote(env, lat, lng) {
   const round = Math.max(1, num(env.DELIVERY_ROUND_KES, 10));
   if (lat == null || lng == null) return { ok: true, km: null, fee_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), pinned: false };
-  const km = haversineKm(num(env.SHOP_LAT, -0.3031), num(env.SHOP_LNG, 36.08), lat, lng) * num(env.ROAD_FACTOR, 1.3);
-  const maxKm = num(env.DELIVERY_MAX_KM, 12);
+  const straight = haversineKm(num(env.SHOP_LAT, -0.1671), num(env.SHOP_LNG, 35.966), lat, lng);
+  const km = straight * num(env.ROAD_FACTOR, 1.3); // road estimate, used for the fee
+  const maxKm = num(env.DELIVERY_MAX_KM, 3);       // the delivery radius is measured in a straight line from the shop
   const raw = num(env.DELIVERY_BASE_KES, 50) + num(env.DELIVERY_PER_KM_KES, 25) * km;
   const fee = Math.max(num(env.DELIVERY_MIN_KES, 100), Math.ceil(raw / round) * round);
-  return { ok: km <= maxKm, km: Math.round(km * 10) / 10, fee_kes: fee, pinned: true, max_km: maxKm };
+  return { ok: straight <= maxKm, km: Math.round(km * 10) / 10, straight_km: Math.round(straight * 10) / 10, fee_kes: fee, pinned: true, max_km: maxKm };
 }
 
 // ---------- Opening hours ----------
@@ -284,7 +285,7 @@ async function createOrder(env, req) {
   if (b.lat != null || b.lng != null) {
     lat = Number(b.lat); lng = Number(b.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'The map pin is not valid. Please pin again.' }, 400);
-    if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our Nakuru delivery area.' }, 400);
+    if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our delivery area.' }, 400);
   }
   // With a map pin the landmark is optional; without one we need a written delivery spot.
   let address = String(b.address || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -306,7 +307,7 @@ async function createOrder(env, req) {
 
   // Price comes from the database, never from the browser. The delivery fee is worked out here from the pin.
   const dq = deliveryQuote(env, lat, lng);
-  if (!dq.ok) return json({ error: `That spot is about ${dq.km} km away. We deliver up to ${dq.max_km} km from the shop.` }, 400);
+  if (!dq.ok) return json({ error: `That spot is about ${dq.straight_km} km away. We deliver within ${dq.max_km} km of Kabarak.` }, 400);
   const total = product.price_kes * qty + dq.fee_kes;
   // A double tap or a retried request must not send two payment prompts: an identical unpaid order from the last few seconds is returned instead.
   const dupMs = num(env.DEDUPE_SECONDS, 20) * 1000;
@@ -409,7 +410,7 @@ export default {
         if (prev && prev.stale_alerted) await alertOwners(env, 'The outside site monitor is reporting again.');
         return json({ ok: true });
       }
-      if (path === '/api/config') return json({ shop: await shopStatus(env), payments_mode: env.PAYMENTS_MODE, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
+      if (path === '/api/config') return json({ shop: await shopStatus(env), center: { lat: num(env.SHOP_LAT, -0.1671), lng: num(env.SHOP_LNG, 35.966) }, payments_mode: env.PAYMENTS_MODE, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
       if (path === '/api/quote' && method === 'GET') {
         const la = url.searchParams.get('lat'), ln = url.searchParams.get('lng');
         if (la === null || ln === null) return json(deliveryQuote(env, null, null));

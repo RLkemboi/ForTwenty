@@ -104,7 +104,7 @@
 
 <div id="app">
   <div class="bar">
-    <b>Nakuru delivery</b>
+    <b>Kabarak delivery</b>
     <span class="age">18+ only</span>
     <button id="info" type="button" aria-label="How it works" aria-expanded="false" aria-controls="tips">i</button>
   </div>
@@ -291,7 +291,7 @@ async function refreshQuote() {
   const r = await api('/api/quote?lat=' + pin.lat + '&lng=' + pin.lng);
   if (my !== quoteSeq) return;
   quote = r.ok ? r.data : null;
-  if (quote && quote.ok === false) { $('pinhint').className = 'hint err'; $('pinhint').textContent = `That spot is about ${quote.km} km away. We deliver up to ${quote.max_km} km from the shop.`; }
+  if (quote && quote.ok === false) { $('pinhint').className = 'hint err'; $('pinhint').textContent = `That spot is about ${quote.straight_km} km away. We deliver within ${quote.max_km} km of Kabarak.`; }
   updateTotal();
 }
 function updateTotal() {
@@ -373,12 +373,12 @@ function pinText() {
 }
 function inArea(lat, lng) { const a = config.area; return !a || (lat >= a.latMin && lat <= a.latMax && lng >= a.lngMin && lng <= a.lngMax); }
 function setPin(lat, lng, zoom) {
-  if (!inArea(lat, lng)) { $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; return false; }
+  if (!inArea(lat, lng)) { $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our delivery area.'; return false; }
   pin = { lat, lng };
   if (/^Please pin/.test($('msg').textContent)) { $('msg').textContent = ''; $('msg').className = ''; }
   if (!marker) {
     marker = L.marker([lat, lng], { draggable: true, keyboard: true, title: 'Delivery pin' }).addTo(map);
-    marker.on('dragend', () => { const p = marker.getLatLng(); if (inArea(p.lat, p.lng)) { pin = { lat: p.lat, lng: p.lng }; pinText(); refreshQuote(); } else { marker.setLatLng([pin.lat, pin.lng]); $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our Nakuru delivery area.'; } });
+    marker.on('dragend', () => { const p = marker.getLatLng(); if (inArea(p.lat, p.lng)) { pin = { lat: p.lat, lng: p.lng }; pinText(); refreshQuote(); } else { marker.setLatLng([pin.lat, pin.lng]); $('pinhint').className = 'hint err'; $('pinhint').textContent = 'That spot is outside our delivery area.'; } });
   } else marker.setLatLng([lat, lng]);
   if (zoom) map.setView([lat, lng], zoom);
   pinText();
@@ -389,7 +389,9 @@ function showMap() {
   if (!mapReady()) { $('map').style.display = 'none'; $('loc').style.display = 'none'; $('maplabel').style.display = 'none'; $('pinhint').style.display = 'none'; $('mapfail').style.display = 'block'; return; }
   if (!map) {
     L.Icon.Default.imagePath = '/vendor/leaflet/images/';
-    map = L.map('map', { center: [-0.3031, 36.08], zoom: 14, zoomControl: true });
+    const ctr = config.center || { lat: -0.1671, lng: 35.966 };
+    map = L.map('map', { center: [ctr.lat, ctr.lng], zoom: 14, zoomControl: true });
+    if (config.pricing && config.pricing.max_km) L.circle([ctr.lat, ctr.lng], { radius: config.pricing.max_km * 1000, color: '#c0392b', weight: 2, fillOpacity: 0.05, interactive: false }).addTo(map);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
     map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
   }
@@ -444,7 +446,7 @@ $('f').onsubmit = async (e) => {
   const num = resolvePhone($('cc').value, $('ph').value);
   if (!num) { $('msg').className = 'err'; $('msg').textContent = 'Check the phone number: it must be a Kenyan number, like 0712 345 678.'; $('ph').focus(); return; }
   // Last check before a payment prompt is sent to a phone: show the number and ask.
-  if (quote && quote.ok === false) { $('msg').className = 'err'; $('msg').textContent = `That spot is about ${quote.km} km away. We deliver up to ${quote.max_km} km from the shop.`; return; }
+  if (quote && quote.ok === false) { $('msg').className = 'err'; $('msg').textContent = `That spot is about ${quote.straight_km} km away. We deliver within ${quote.max_km} km of Kabarak.`; return; }
   const q = Number($('q').value), total = picked.size.price_kes * q + deliveryFee();
   $('msg').textContent = '';
   $('cfmt').textContent = `Send the ${PROV[provider()].name} prompt for KSh ${total} to +${num.slice(0, 3)} ${num.slice(3, 6)} ${num.slice(6, 9)} ${num.slice(9)}? Please make sure this is your own number.`;
