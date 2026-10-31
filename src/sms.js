@@ -1,13 +1,16 @@
 // SMS adapter. SMS_MODE=mock records messages in sms_log; SMS_MODE=at sends through Africa's Talking.
 // AT_ENV=sandbox uses AT's test servers (nothing reaches a real phone); anything else is live.
 // The "at" path is written but NOT yet tested against the real service: it needs credentials.
-export async function sendSms(env, to, body) {
+import { normalizePhone, phoneList } from './phone.js';
+
+export async function sendSms(env, rawTo, body) {
   const now = Date.now();
+  const to = normalizePhone(rawTo) || String(rawTo || '').replace(/\D/g, '');
   let status = 'mock';
   // While payments are still a demo, anyone can trigger an SMS from the public site. If SMS_ALLOWLIST is set,
   // only those numbers get a real message; everything else is logged as blocked and costs nothing.
-  const allow = String(env.SMS_ALLOWLIST || '').split(',').map((x) => x.trim()).filter(Boolean);
-  if (env.SMS_MODE === 'at' && allow.length && !allow.includes(to)) {
+  const allow = phoneList(env.SMS_ALLOWLIST);
+  if (env.SMS_MODE === 'at' && (String(env.SMS_ALLOWLIST || '').trim() !== '') && !allow.includes(to)) {
     await env.DB.prepare('INSERT INTO sms_log (to_phone, body, status, created_at) VALUES (?, ?, ?, ?)').bind(to, body, 'blocked:not_on_allowlist', now).run();
     return 'blocked:not_on_allowlist';
   }

@@ -1,20 +1,13 @@
 import { stkPush, queryStatus } from './payments.js';
 import { sendSms } from './sms.js';
+import { normalizePhone, phoneList } from './phone.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const html = (body, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8' } });
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 const rid = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((b) => ALPHABET[b % ALPHABET.length]).join('');
 
-// 07xx / 01xx / +254 / 254 -> 2547xxxxxxxx or 2541xxxxxxxx, else null
-export function normalizePhone(raw) {
-  let p = String(raw || '').replace(/[\s()-]/g, '');
-  if (p.startsWith('+')) p = p.slice(1);
-  if (p.startsWith('00')) p = p.slice(2);
-  if (/^0[17]\d{8}$/.test(p)) p = '254' + p.slice(1);
-  p = p.replace(/^254(?:0|254)(?=[17]\d{8}$)/, '254'); // +254 then 0712..., or the code typed twice
-  return /^254[17]\d{8}$/.test(p) ? p : null;
-}
+export { normalizePhone };
 
 const mapLink = (lat, lng) => `https://maps.google.com/?q=${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
 
@@ -24,7 +17,7 @@ const providersOn = (env) => String(env.ENABLED_PROVIDERS || 'mpesa').split(',')
 // Placeholder service area around Nakuru town (roughly 25 km each way). Real delivery rules come later.
 const AREA = { latMin: -0.55, latMax: -0.05, lngMin: 35.85, lngMax: 36.3 };
 
-const alertOwners = (env, msg) => Promise.all(String(env.ALERT_PHONES || '').split(',').filter(Boolean).map((n) => sendSms(env, n.trim(), msg)));
+const alertOwners = (env, msg) => Promise.all(phoneList(env.ALERT_PHONES).map((n) => sendSms(env, n, msg)));
 
 async function assignRider(env, orderId) {
   if (env.RIDER_MODE === 'demo') {
