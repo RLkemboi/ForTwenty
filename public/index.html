@@ -51,11 +51,12 @@
 @keyframes nudge { 50% { transform: translateY(4px); } }
 .cover { position: fixed; inset: 0; z-index: 20; clip-path: circle(0 at 50% 80%); pointer-events: none; }
 .clone { position: fixed; z-index: 25; margin: 0; pointer-events: none; will-change: transform; transform-origin: 50% 50%; }
-.tube .fl { animation: tfloat 5.5s ease-in-out infinite; transform-origin: 150px 200px; }
-.tube .tsh { animation: tshad 5.5s ease-in-out infinite; transform-origin: 150px 378px; }
+.dim { opacity: var(--sd, 0); pointer-events: none; }
+.sleeve.on .tube .fl, .clone .tube .fl { animation: tfloat 5.5s ease-in-out infinite; transform-origin: 150px 200px; }
+.sleeve.on .tube .tsh, .clone .tube .tsh { animation: tshad 5.5s ease-in-out infinite; transform-origin: 150px 378px; }
 @keyframes tfloat { 0%,100% { transform: translateY(5px) rotate(-1.2deg); } 50% { transform: translateY(-9px) rotate(1.4deg); } }
 @keyframes tshad { 0%,100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(.78); opacity: .65; } }
-@media (prefers-reduced-motion: reduce) { .tube .fl, .tube .tsh { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tube .fl, .sleeve.on .tube .tsh, .clone .tube .tsh { animation: none; } }
 .clone svg, .clone img { width: 100%; height: 100%; display: block; object-fit: contain; }
 .detail { position: fixed; inset: 0; z-index: 28; opacity: 0; pointer-events: none; transition: opacity 360ms ease; touch-action: pan-y; }
 .detail.show { opacity: 1; pointer-events: auto; }
@@ -266,28 +267,38 @@ function packArt(f, cls, size) {
   if (f.image) return `<img class="${cls || ''}" src="${esc(f.image)}" alt="${esc(f.name)}">`;
   const c = f.color || '#888', hi = shade(c, .42), mid = shade(c, .12), lo = shade(c, -.5), id = 't' + f.id + (cls || '') + (++artN);
   const nm = esc(String(f.name).trim().toUpperCase().slice(0, 16));
-  if (size === 'sample') return `<svg class="tube cone ${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)} sample"><defs>
-    <filter id="${id}n" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency=".8 1.3" numOctaves="3" seed="${(Number(f.id) || 1) * 7}" result="n"/><feColorMatrix in="n" type="matrix" values="1.9 0 0 0 -.05  1.9 0 0 0 -.05  1.9 0 0 0 -.05  0 0 0 0 1" result="g"/><feBlend in="SourceGraphic" in2="g" mode="multiply"/></filter>
-    <linearGradient id="${id}v" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/><stop offset=".72" stop-color="#000" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>
-    <linearGradient id="${id}p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#ece7dc"/><stop offset="1" stop-color="#a9a396"/></linearGradient>
-    <clipPath id="${id}c"><path d="M26 181 L205 189 L284 192 Q290 200 284 208 L205 211 L26 219 Q18 200 26 181z"/></clipPath>
-    <radialGradient id="${id}s" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>
-    <ellipse class="tsh" cx="150" cy="378" rx="86" ry="8" fill="url(#${id}s)"/>
+  if (size === 'sample') {
+    const ink = '#0b0b0b', B = 'M26 177L205 188L284 192Q290 200 284 208L205 212L26 223Q17 200 26 177z';
+    return `<svg class="tube cone ${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)} sample"><defs>
+    <pattern id="${id}h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3" cy="3" r="1.4" fill="#000" fill-opacity=".4"/></pattern>
+    <pattern id="${id}f" width="13" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(-8)"><path d="M1 2l5 1.5M8 6l4-1M3 7.5l3-.5M9 1.5l3 1" stroke="${shade(c, -.6)}" stroke-opacity=".55" stroke-width="1.3" stroke-linecap="round"/><path d="M2 5l3-1M7 3.5l4 1.4M10 8l2-.5" stroke="${hi}" stroke-opacity=".6" stroke-width="1.1" stroke-linecap="round"/><circle cx="6" cy="8" r=".9" fill="${shade(c, -.55)}" fill-opacity=".5"/></pattern>
+    <clipPath id="${id}c"><path d="${B}"/></clipPath></defs>
+    <ellipse class="tsh" cx="158" cy="379" rx="84" ry="7" fill="#000" fill-opacity=".38"/>
     <g class="fl"><g transform="rotate(-33 150 200) translate(150 200) scale(1.12) translate(-150 -200)">
+      <path d="${B}" transform="translate(5 8)" fill="${shade(c, -.6)}" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
       <g clip-path="url(#${id}c)">
-        <rect x="0" y="150" width="300" height="100" fill="${shade(c, .1)}" filter="url(#${id}n)"/>
-        <g stroke="${shade(c, -.55)}" stroke-opacity=".45" stroke-width="1.4" fill="none"><path d="M30 178l60 4M60 214l70-3M110 190l50 3M150 222l58-6M44 200l38 1M120 206l60 2M170 184l36 3"/></g>
-        <g stroke="${hi}" stroke-opacity=".5" stroke-width="1.2" fill="none"><path d="M36 190l44 2M92 226l52-5M140 176l60 6M70 172l40 5M180 218l30-3"/></g>
-        <rect x="204" y="150" width="100" height="100" fill="url(#${id}p)"/>
-        <g stroke="#000" stroke-opacity=".12">${Array.from({ length: 9 }, (_, k) => `<path d="M${212 + k * 9} 170V232"/>`).join('')}</g>
-        <path d="M214 188.5L234 189.3V210.7L214 211.5z" fill="${c}" opacity=".95"/>
-        <path d="M205 189V211" stroke="#000" stroke-opacity=".35" stroke-width="1.5"/>
-        <rect x="0" y="150" width="300" height="100" fill="url(#${id}v)"/>
+        <rect x="10" y="170" width="290" height="60" fill="${c}"/>
+        <rect x="10" y="170" width="200" height="60" fill="url(#${id}f)"/>
+        <path d="M10 200L205 200L290 200V230H10z" fill="${shade(c, -.3)}"/>
+        <path d="M10 201L205 201L290 201V230H10z" fill="url(#${id}h)"/>
+        <path d="M26 184L205 191.5V195L26 189z" fill="${hi}" fill-opacity=".85"/>
+        <path d="M40 190l40 2M96 192l30 1.4" stroke="#fff" stroke-opacity=".8" stroke-width="2.2" stroke-linecap="round"/>
+        <rect x="205" y="170" width="95" height="60" fill="#f4ead6"/>
+        <path d="M205 200H290V230H205z" fill="#cdbd9d"/><path d="M205 201H290V230H205z" fill="url(#${id}h)" fill-opacity=".55"/>
+        <path d="M205 189L290 192V196L205 193z" fill="#fff"/>
+        <path d="M214 187l7 26M226 187l7 26M238 188l7 25M250 189l7 24M262 190l7 22" stroke="#000" stroke-opacity=".22" stroke-width="1.3"/>
+        <path d="M205 192L284 205" stroke="${ink}" stroke-opacity=".35" stroke-width="1.2"/>
+        <path d="M214 188.4L234 189.2V210.8L214 211.6z" fill="${c}" stroke="${ink}" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M205 189V211" stroke="${ink}" stroke-width="3"/>
+        <path d="${B}" fill="#000" class="dim"/>
       </g>
-      <path d="M26 181Q18 200 26 219" fill="none" stroke="${shade(c, -.6)}" stroke-width="3" stroke-linecap="round"/>
-      <path d="M26 182q-6 8-5 16M25 218q-6-8-4-16" fill="none" stroke="${hi}" stroke-opacity=".6" stroke-width="1.6" stroke-linecap="round"/>
+      <ellipse cx="284.5" cy="200" rx="4.6" ry="8" fill="#2a1d12" stroke="${ink}" stroke-width="2.4"/><ellipse cx="283.4" cy="198.5" rx="1.6" ry="3.6" fill="#fff" fill-opacity=".35"/>
+      <ellipse cx="26" cy="200" rx="8" ry="23" fill="${shade(c, -.6)}" stroke="${ink}" stroke-width="3.5"/>
+      <path d="M24 190q4 4 1 9M23 205q4 3 2 8M27 195l3 2M21 210l4-1" stroke="${hi}" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+      <path d="${B}" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
     </g></g>
   </svg>`;
+  }
   // Packet: a comic-style (inked, cel-shaded, halftone) stand-up zip pouch with a holographic window. Design is our own.
   const words = String(f.name).trim().toUpperCase().split(/\s+/), l1 = esc(words[0] || ''), l2 = esc(words.slice(1).join(' '));
   const fs = Math.max(12, Math.min(27, Math.floor(138 / Math.max(l1.length, l2.length, 1) * 1.55)));
@@ -317,6 +328,7 @@ function packArt(f, cls, size) {
         <g clip-path="url(#${id}w)"><path d="M70 330L120 220H150L100 330zM130 330L180 220H200L150 330zM180 330L230 220H250L200 330z" fill="#ff9ed8" fill-opacity=".85"/><path d="M110 330L160 220H180L130 330zM160 330L210 220H228L178 330z" fill="#8fe8ff" fill-opacity=".9"/><path d="M150 330L200 220H212L162 330zM60 330L110 220H122L72 330z" fill="#fff3a0" fill-opacity=".9"/><path d="M96 244H140L98 300H96z" fill="#fff" fill-opacity=".75"/><path d="M146 244H156L114 300H104z" fill="#fff" fill-opacity=".55"/></g>
         <rect x="88" y="232" width="124" height="74" rx="12" fill="none" stroke="${ink}" stroke-width="4.5"/>
       </g>
+      <path d="${P}" class="dim" fill="#000"/>
       <path d="${P}" fill="none" stroke="${ink}" stroke-width="5" stroke-linejoin="round"/>
       <g text-anchor="middle" font-family="Unbounded,Arial Black,sans-serif" font-weight="900" fill="#fff" stroke="${ink}" stroke-width="6" stroke-linejoin="round" paint-order="stroke" letter-spacing="1"><text x="150" y="${y1}" font-size="${fs}">${l1}</text>${l2 ? `<text x="150" y="${y1 + fs * 1.2}" font-size="${fs}">${l2}</text>` : ''}</g>
       <path d="M96 205H204" stroke="${ink}" stroke-width="4" stroke-linecap="round"/><path d="M96 205H204" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1 7"/>
@@ -353,7 +365,8 @@ function makeRail(size, label, price, hintUp, hintDown) {
       b.style.transform = `translateX(-50%) rotate(${off * STEP()}deg) scale(${sc})`;
       b.style.zIndex = String(200 - Math.round(a * 20));
       b.style.opacity = String(Math.max(0, 1 - Math.max(0, a - 2) * 1.2));
-      b.style.filter = `brightness(${(1 - Math.min(a, 2.5) * .16).toFixed(3)})`;
+      b.style.setProperty('--sd', (Math.min(a, 2.5) * .16).toFixed(3));
+      const on = a < .5; if (b._on !== on) { b._on = on; b.classList.toggle('on', on); }
       b.style.pointerEvents = a > 2.6 ? 'none' : '';
     });
     const idx = R.dragging ? R.active : ((Math.round(R.target) % m) + m) % m;
