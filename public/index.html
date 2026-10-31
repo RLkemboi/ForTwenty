@@ -392,6 +392,7 @@ $('loc').onclick = () => {
 
 const FAILS = { payment_failed: 'The payment did not go through. Nothing was charged.', amount_mismatch: 'We received a different amount than expected. We will contact you by SMS.', expired: 'The payment prompt expired. Nothing was charged.' };
 // state: sending | prompt | paid | assigned | delivered | payment_failed | amount_mismatch | expired
+let paidSeenAt = 0;
 function renderProg(state) {
   const order = ['s1', 's2', 's3', 's4'];
   const at = { sending: 0, prompt: 1, paid: 3, assigned: 4, delivered: 4 }[state];
@@ -405,7 +406,9 @@ function renderProg(state) {
   $('s2').textContent = failed ? (state === 'expired' ? 'Payment prompt expired' : 'Payment did not go through') : (state === 'sending' ? 'Sending the payment prompt' : state === 'prompt' ? 'Prompt sent. Enter your PIN on your phone' : 'Payment prompt sent to your phone');
   $('s3').textContent = state === 'paid' || state === 'assigned' || state === 'delivered' ? 'Payment confirmed' : 'Waiting for payment confirmation';
   $('pmsg').className = failed ? 'err' : '';
-  $('pmsg').textContent = failed || (state === 'delivered' ? 'Thank you! Enjoy.' : state === 'assigned' ? 'We also sent you an SMS. Order ' + orderId : '');
+  if (state === 'paid') { if (!paidSeenAt) paidSeenAt = Date.now(); } else paidSeenAt = 0;
+  const slow = state === 'paid' && paidSeenAt && Date.now() - paidSeenAt > 120000;
+  $('pmsg').textContent = failed || (state === 'delivered' ? 'Thank you! Enjoy.' : state === 'assigned' ? 'Order ' + orderId + '. If our SMS does not arrive (some phones block promo texts), keep this page open: it shows your order status.' : slow ? 'Still finding a rider. This is taking longer than usual. Your payment is safe and this page will update the moment a rider accepts.' : '');
   $('again').style.display = failed ? 'block' : 'none';
 }
 function showForm() { $('f').style.display = ''; $('cfm').style.display = 'none'; $('go').style.display = ''; $('prog').style.display = 'none'; $('demo').style.display = 'none'; clearInterval(timer); }
