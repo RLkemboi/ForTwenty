@@ -42,7 +42,7 @@ async function assignRider(env, orderId) {
       return false;
     }
     const o = await env.DB.prepare('SELECT address, phone, delivery_token, total_kes, lat, lng FROM orders WHERE id = ?').bind(orderId).first();
-    await sendSms(env, rider.phone, `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Customer ${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`);
+    await sendSms(env, rider.phone, `Delivery: ${o.address}.${o.lat != null ? ' Map: ' + mapLink(o.lat, o.lng) + '.' : ''} Call customer: +${o.phone}. Paid KSh ${o.total_kes}. Mark delivered: ${env.PUBLIC_URL}/d/${o.delivery_token}`);
     return true;
   }
   return false;
@@ -160,7 +160,7 @@ async function reconcile(env) {
 const adminOk = (req, env) => env.ADMIN_TOKEN && req.headers.get('authorization') === 'Bearer ' + env.ADMIN_TOKEN;
 
 const deliveryPage = (o, token) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delivery</title>
-<body style="font-family:system-ui;max-width:420px;margin:24px auto;padding:0 16px"><h2>Delivery</h2><p><b>Address:</b> ${o.address.replace(/</g, '&lt;')}</p>${o.lat != null ? `<p><a href="${mapLink(o.lat, o.lng)}" style="font-size:18px">Open the pin in Maps</a></p>` : ''}<p><b>Customer:</b> ${o.phone}</p><p><b>Amount paid:</b> KSh ${o.total_kes}</p>
+<body style="font-family:system-ui;max-width:420px;margin:24px auto;padding:0 16px"><h2>Delivery</h2><p><b>Address:</b> ${o.address.replace(/</g, '&lt;')}</p>${o.lat != null ? `<p><a href="${mapLink(o.lat, o.lng)}" style="font-size:18px">Open the pin in Maps</a></p>` : ''}<p><b>Customer:</b> <a href="tel:+${o.phone}">+${o.phone}</a></p><p><b>Amount paid:</b> KSh ${o.total_kes}</p>
 <button id="b" style="font-size:18px;padding:14px 20px;width:100%">Mark delivered</button><p id="m"></p>
 <script>b.onclick=async()=>{b.disabled=true;const r=await fetch('/api/deliver/${token}',{method:'POST'});m.textContent=r.ok?'Done. Thank you.':'Could not save. Try again.';if(!r.ok)b.disabled=false};</script>`;
 

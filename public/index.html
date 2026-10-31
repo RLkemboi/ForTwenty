@@ -77,6 +77,18 @@
   .locbtn { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #1a1a1a; border-radius: 10px; background: #fff; cursor: pointer; margin-top: 4px; }
   #mapfail { display: none; }
   #msg { margin-top: 14px; min-height: 24px; }
+  ol.steps { list-style: none; margin: 18px 0 8px; padding: 0; }
+  ol.steps li { display: flex; gap: 12px; align-items: center; padding: 10px 0; color: #888; font-size: 16px; }
+  ol.steps li::before { content: ''; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc; flex: none; text-align: center; font-size: 14px; line-height: 18px; font-weight: 700; }
+  ol.steps li.active { color: #1a1a1a; font-weight: 600; }
+  ol.steps li.active::before { border-color: #1a1a1a; border-top-color: transparent; animation: spin 0.9s linear infinite; }
+  ol.steps li.done { color: #1a1a1a; }
+  ol.steps li.done::before { content: '\2713'; background: #1b7f5a; border-color: #1b7f5a; color: #fff; }
+  ol.steps li.failed { color: #b00020; font-weight: 600; }
+  ol.steps li.failed::before { content: '\00d7'; background: #b00020; border-color: #b00020; color: #fff; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { ol.steps li.active::before { animation: none; border-top-color: #1a1a1a; } }
+  #pmsg { font-size: 16px; margin: 8px 0 0; }
   .err { color: #b00020; }
   .box { border: 1px solid #ccc; border-radius: 8px; padding: 14px; margin-top: 16px; }
   .demo { background: #fff8e1; border-color: #e6c200; }
@@ -159,6 +171,16 @@
       <button class="pay" id="go" type="submit">Pay with M-Pesa</button>
     </form>
     <div id="msg" role="status"></div>
+    <div id="prog" style="display:none" aria-live="polite">
+      <ol class="steps">
+        <li id="s1">Placing your order</li>
+        <li id="s2">Payment prompt sent to your phone</li>
+        <li id="s3">Payment confirmed</li>
+        <li id="s4">Rider assigned</li>
+      </ol>
+      <p id="pmsg"></p>
+      <button class="pay" id="again" type="button" style="display:none">Try again</button>
+    </div>
     <div id="demo" class="box demo" style="display:none">
       <b>Demo mode</b> (no real money moves)<br>Simulate what the customer does on their phone:
       <button id="dpay" type="button">Customer enters PIN and pays</button>
@@ -266,7 +288,7 @@ function openOrder(flavor, size) {
   $('dsub').textContent = `${flavor.name}, ${size.size === 'packet' ? 'packet' : 'sample'} (${KES(size.price_kes)} each)`;
   $('msg').textContent = ''; $('msg').className = ''; $('demo').style.display = 'none'; $('go').disabled = false;
   $('q').value = 1; phoneHint();
-  setupProviders();
+  showForm(); setupProviders();
   updateTotal();
   $('dlg').showModal();
   showMap();
@@ -363,29 +385,50 @@ $('loc').onclick = () => {
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 };
 
+const FAILS = { payment_failed: 'The payment did not go through. Nothing was charged.', amount_mismatch: 'We received a different amount than expected. We will contact you by SMS.', expired: 'The payment prompt expired. Nothing was charged.' };
+// state: sending | prompt | paid | assigned | delivered | payment_failed | amount_mismatch | expired
+function renderProg(state) {
+  const order = ['s1', 's2', 's3', 's4'];
+  const at = { sending: 0, prompt: 1, paid: 3, assigned: 4, delivered: 4 }[state];
+  const failed = FAILS[state];
+  order.forEach((id, i) => {
+    const li = $(id); li.className = '';
+    if (failed) { li.className = i === 0 ? 'done' : i === 1 ? 'failed' : ''; return; }
+    li.className = i < at ? 'done' : i === at ? 'active' : '';
+  });
+  if (state === 'delivered') $('s4').textContent = 'Delivered'; else if (state === 'assigned') $('s4').textContent = 'Rider is on the way'; else $('s4').textContent = state === 'paid' ? 'Finding a rider for you' : 'Rider assigned';
+  $('s2').textContent = failed ? (state === 'expired' ? 'Payment prompt expired' : 'Payment did not go through') : (state === 'sending' ? 'Sending the payment prompt' : state === 'prompt' ? 'Prompt sent. Enter your PIN on your phone' : 'Payment prompt sent to your phone');
+  $('s3').textContent = state === 'paid' || state === 'assigned' || state === 'delivered' ? 'Payment confirmed' : 'Waiting for payment confirmation';
+  $('pmsg').className = failed ? 'err' : '';
+  $('pmsg').textContent = failed || (state === 'delivered' ? 'Thank you! Enjoy.' : state === 'assigned' ? 'We also sent you an SMS. Order ' + orderId : '');
+  $('again').style.display = failed ? 'block' : 'none';
+}
+function showForm() { $('f').style.display = ''; $('prog').style.display = 'none'; $('demo').style.display = 'none'; clearInterval(timer); }
+$('again').onclick = () => { showForm(); $('go').disabled = false; $('msg').textContent = ''; };
+
 async function poll() {
   const r = await api('/api/orders/' + orderId);
-  if (!r.ok) { $('msg').textContent = 'Could not check your order. Retrying.'; return; }
+  if (!r.ok) { $('pmsg').textContent = 'Could not check your order. Retrying.'; return; }
   const s = r.data.status;
-  $('msg').className = ['payment_failed', 'amount_mismatch', 'expired'].includes(s) ? 'err' : '';
-  $('msg').textContent = STATUS_TEXT[s] || s;
+  renderProg(s === 'awaiting_payment' ? 'prompt' : s);
   if (s !== 'awaiting_payment') $('demo').style.display = 'none';
-  if (['delivered', 'payment_failed', 'amount_mismatch', 'expired'].includes(s)) { clearInterval(timer); $('go').disabled = false; }
+  if (['delivered', 'payment_failed', 'amount_mismatch', 'expired'].includes(s)) clearInterval(timer);
 }
 
 $('f').onsubmit = async (e) => {
   e.preventDefault();
   if (mapReady() && !pin) { $('msg').className = 'err'; $('msg').textContent = 'Please pin your spot on the map, or tap "Use my current location".'; return; }
-  $('go').disabled = true; $('msg').className = ''; $('msg').textContent = 'Sending the ' + PROV[provider()].name + ' prompt...';
+  $('go').disabled = true; $('msg').className = ''; $('msg').textContent = '';
+  $('f').style.display = 'none'; $('prog').style.display = 'block'; renderProg('sending');
   const r = await api('/api/orders', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ product_id: picked.size.product_id, qty: Number($('q').value), phone: $('cc').value + $('ph').value, address: $('ad').value, age_confirmed: $('age').checked, provider: provider(), lat: pin ? pin.lat : undefined, lng: pin ? pin.lng : undefined }),
   });
-  if (!r.ok) { $('msg').className = 'err'; $('msg').textContent = r.data.error || 'Something went wrong. Please try again.'; $('go').disabled = false; return; }
+  if (!r.ok) { showForm(); $('go').disabled = false; $('msg').className = 'err'; $('msg').textContent = r.data.error || 'Something went wrong. Please try again.'; return; }
   orderId = r.data.order_id;
-  $('msg').textContent = STATUS_TEXT.awaiting_payment + ' Order ' + orderId;
+  renderProg('prompt');
   if (config.payments_mode === 'mock') $('demo').style.display = 'block';
-  clearInterval(timer); timer = setInterval(poll, 3000);
+  clearInterval(timer); timer = setInterval(poll, 2000);
 };
 
 async function demo(result) {

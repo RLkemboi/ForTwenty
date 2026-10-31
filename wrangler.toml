@@ -17,7 +17,7 @@ crons = ["*/5 * * * *"]
 # go in .dev.vars locally and in `wrangler secret put` for production.
 [vars]
 PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval exist, then "daraja"
-SMS_MODE = "mock"             # "mock" logs messages; "at" sends through Africa's Talking
+SMS_MODE = "at"               # "mock" logs messages only; "at" sends through Africa's Talking (AT_ENV decides sandbox or live)
 DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account
 ENABLED_PROVIDERS = "mpesa,airtel"  # remove "airtel" to hide it until the Airtel account is live
