@@ -97,6 +97,10 @@ const other = await fetch(B + '/api/admin/orders', { headers: { ...ADMIN, 'cf-co
 check('other address unaffected', other.status === 200);
 const mb = await fetch(B + '/api/monitor/beat', { method: 'POST', headers: { authorization: 'Bearer nope', 'cf-connecting-ip': '203.0.113.11' }, body: '{}' });
 check('monitor wrong token refused', mb.status === 403);
+const mh = { 'cf-connecting-ip': '203.0.113.12' };
+for (let i = 0; i < 15; i++) await fetch(B + '/api/monitor/beat', { method: 'POST', headers: { authorization: 'Bearer bad' + i, ...mh }, body: '{}' });
+const mg = await fetch(B + '/api/monitor/beat', { method: 'POST', headers: { authorization: 'Bearer dev-monitor-token', 'content-type': 'application/json', ...mh }, body: '{"ok":true,"detail":"healthy"}' });
+check('monitor with right token never locked out', mg.status === 200, String(mg.status));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

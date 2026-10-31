@@ -401,9 +401,8 @@ export default {
         return json({ ok: !!r, ts: r && r.ts });
       }
       if (path === '/api/monitor/beat' && method === 'POST') {
-        const mip = clientIp(req);
-        if (await isLocked(env, mip)) return json({ error: 'Too many wrong attempts.' }, 429);
-        if (!bearerOk(req, env.MONITOR_TOKEN)) { await noteFail(env, mip); return json({ error: 'Forbidden' }, 403); }
+        // No lockout here on purpose: a lockout could block the real monitor and look like an outage. The token is long and random.
+        if (!bearerOk(req, env.MONITOR_TOKEN)) return json({ error: 'Forbidden' }, 403);
         const b = await req.json().catch(() => ({}));
         const prev = await env.DB.prepare('SELECT stale_alerted FROM monitor_beat WHERE id = 1').first();
         await env.DB.prepare('INSERT INTO monitor_beat (id, ts, ok, detail, stale_alerted) VALUES (1, ?, ?, ?, 0) ON CONFLICT(id) DO UPDATE SET ts = excluded.ts, ok = excluded.ok, detail = excluded.detail, stale_alerted = 0').bind(Date.now(), b.ok ? 1 : 0, String(b.detail || '').slice(0, 200)).run();
