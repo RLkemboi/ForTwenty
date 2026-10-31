@@ -1,0 +1,29 @@
+name: Site monitor
+# Runs on GitHub, independent of Cloudflare. GitHub may start scheduled runs a few minutes late.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+permissions:
+  issues: write
+  contents: read
+concurrency:
+  group: site-monitor
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check the site
+        run: node scripts/monitor.mjs
+        env:
+          SITE_URL: https://fortwenty.kipp-ralph.workers.dev
+          ALERT_PHONES: ${{ secrets.ALERT_PHONES }}
+          AT_USERNAME: ${{ secrets.AT_USERNAME }}
+          AT_API_KEY: ${{ secrets.AT_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
