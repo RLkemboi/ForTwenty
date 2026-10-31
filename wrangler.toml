@@ -23,7 +23,7 @@ AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live colle
 RIDER_MODE = "demo"           # DEMO: finding a rider always passes. Set "real" to use free/busy riders and the queue
 ENABLED_PROVIDERS = "mpesa,airtel"  # remove "airtel" to hide it until the Airtel account is live
 AT_ENV = "live"               # "sandbox" = AT test servers (nothing reaches phones); "live" = real texts, needs a funded account
-SMS_ALLOWLIST = "254702581356,254712601406" # while payments are a demo, ONLY these numbers get real SMS. Delete this line when real payments go live
+SMS_ALLOWLIST = "254702581356,254712601406,254117795777" # while payments are a demo, ONLY these numbers get real SMS. Delete this line when real payments go live
 ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is added when provided
 RIDER_CUT_PCT = "10"          # PLACEHOLDER: real rider cut not yet decided
 DELIVERY_FEE_KES = "0"        # PLACEHOLDER: delivery fee not yet decided
