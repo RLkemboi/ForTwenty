@@ -149,6 +149,21 @@ const page = await (await fetch(B + '/d/' + tok2)).text();
 check('rider page has call link and map link', /tel:\+254/.test(page) && /maps\.google\.com/.test(page), page.slice(0, 200));
 check('rider page escapes html', !/<b>x<\/b>/.test(page));
 
+// ---- Blocked customers (step 5b) ----
+check('block needs token', (await post('/api/admin/blocked', { phone: '0744000001' })).status === 403);
+check('block rejects junk phone', (await postA('/api/admin/blocked', { phone: 'abc' })).status === 400);
+check('block works in 0-format', (await (await postA('/api/admin/blocked', { phone: '0744 000 001', reason: 'test' })).json()).phone === '254744000001');
+let bl = await get('/api/admin/blocked', ADMIN);
+check('blocked list has +254 form', bl.length === 1 && bl[0].phone === '254744000001' && bl[0].reason === 'test', JSON.stringify(bl));
+for (const ph of ['0744000001', '+254744000001', '254744000001', '744000001']) {
+  const r = await order({ phone: ph });
+  check('blocked number refused as ' + ph, r.status === 403, String(r.status));
+}
+check('other numbers still order', (await order({ phone: '0744000002' })).status === 200);
+check('unblock via +254 form', (await (await postA('/api/admin/blocked/%2B254744000001/remove', {})).json()).ok === true);
+check('unblocked number can order', (await order({ phone: '0744000001' })).status === 200);
+check('blocked list empty again', (await get('/api/admin/blocked', ADMIN)).length === 0);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

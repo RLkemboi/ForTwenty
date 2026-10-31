@@ -109,6 +109,8 @@ async function createOrder(env, req) {
   if (b.age_confirmed !== true) return json({ error: 'You must confirm you are 18 or older.' }, 400);
   const phone = normalizePhone(b.phone);
   if (!phone) return json({ error: 'Enter a valid Kenyan phone number, like 0712345678.' }, 400);
+  const isBlocked = await env.DB.prepare('SELECT 1 AS x FROM blocked_phones WHERE phone = ?').bind(phone).first();
+  if (isBlocked) return json({ error: 'We are not able to take orders from this number.' }, 403);
   const provider = String(b.provider || 'mpesa');
   if (!providersOn(env).includes(provider)) return json({ error: 'That payment method is not available right now.' }, 400);
   let lat = null, lng = null;
@@ -283,6 +285,21 @@ export default {
           if (name.length < 2 || name.length > 40) return json({ error: 'Name must be 2 to 40 characters.' }, 400);
           if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
           await env.DB.prepare('UPDATE riders SET name = ?, phone = ?, active = ? WHERE id = ?').bind(name, phone, active, cur.id).run();
+          return json({ ok: true });
+        }
+        if (path === '/api/admin/blocked' && method === 'GET') return json((await env.DB.prepare('SELECT phone, reason, created_at FROM blocked_phones ORDER BY created_at DESC').all()).results);
+        if (path === '/api/admin/blocked' && method === 'POST') {
+          const b = await req.json().catch(() => ({}));
+          const phone = normalizePhone(b.phone);
+          if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
+          await env.DB.prepare('INSERT OR REPLACE INTO blocked_phones (phone, reason, created_at) VALUES (?, ?, ?)').bind(phone, String(b.reason || '').trim().slice(0, 120), Date.now()).run();
+          return json({ ok: true, phone });
+        }
+        m = path.match(/^\/api\/admin\/blocked\/([^/]+)\/remove$/);
+        if (m && method === 'POST') {
+          const phone = normalizePhone(decodeURIComponent(m[1]));
+          if (!phone) return json({ error: 'Enter a valid Kenyan phone number.' }, 400);
+          await env.DB.prepare('DELETE FROM blocked_phones WHERE phone = ?').bind(phone).run();
           return json({ ok: true });
         }
         if (path === '/api/admin/sms') return json((await env.DB.prepare('SELECT * FROM sms_log ORDER BY id DESC LIMIT 100').all()).results);

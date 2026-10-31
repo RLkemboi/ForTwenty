@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS sms_log (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS blocked_phones (
+  phone TEXT PRIMARY KEY,
+  reason TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY CHECK (id = 1), ts INTEGER NOT NULL);
 
 -- Placeholders: real flavor names, prices and riders come from the client.
