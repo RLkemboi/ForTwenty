@@ -1,7 +1,8 @@
-import { stkPush, queryStatus } from './payments.js';
+import { stkPush, queryStatus, checkPayments } from './payments.js';
 import { sendSms, retryFailed } from './sms.js';
 import { riderPage } from './riderPage.js';
 import { normalizePhone, phoneList } from './phone.js';
+import { verifySignature, processWebhook, notifyCustomer } from './whatsapp.js';
 
 // Every response from the worker carries these. (Static pages get theirs from public/_headers.)
 const SEC = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
@@ -115,7 +116,7 @@ async function completeDelivery(env, o) {
   if (done.meta.changes !== 1) return;
   await env.DB.prepare('INSERT OR IGNORE INTO ledger (order_id, rider_id, amount_kes, created_at) VALUES (?, ?, ?, ?)').bind(o.id, o.rider_id, riderCut(env, o), Date.now()).run();
   await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(o.rider_id).run();
-  await sendSms(env, o.phone, `Order ${o.id} delivered. Thank you.`);
+  await notifyCustomer(env, o.phone, `Order ${o.id} delivered. Thank you.`, sendSms);
   await dispatchQueue(env);
 }
 
@@ -185,7 +186,7 @@ async function markPaid(env, order, receipt) {
   const res = await env.DB.prepare("UPDATE orders SET status = 'paid', paid_at = ?, mpesa_receipt = ? WHERE id = ? AND status IN ('awaiting_payment', 'payment_failed', 'expired')").bind(Date.now(), receipt, order.id).run();
   if (res.meta.changes !== 1) return;
   if (order.status !== 'awaiting_payment') await alertOwners(env, `Order ${order.id}: payment arrived late (it was marked ${order.status}). It has been recovered and is being delivered.`);
-  await sendSms(env, order.phone, `Payment of KSh ${order.total_kes} received. Order ${order.id} is being assigned to a rider.`);
+  await notifyCustomer(env, order.phone, `Payment of KSh ${order.total_kes} received. Order ${order.id} is confirmed and is being assigned to a rider.`, sendSms);
   await assignRider(env, order.id);
 }
 
@@ -393,7 +394,7 @@ export default {
     const method = req.method;
     try {
       // Public API only: Safaricom and Airtel callbacks, the health ping and the monitor are never limited, so they cannot be shut out.
-      if (env.RL_API && env.RATE_LIMIT_OFF !== '1' && path.startsWith('/api/') && !/^\/api\/(health|monitor\/|mpesa\/callback|airtel\/callback)/.test(path)) {
+      if (env.RL_API && env.RATE_LIMIT_OFF !== '1' && path.startsWith('/api/') && !/^\/api\/(health|monitor\/|mpesa\/callback|airtel\/callback|whatsapp\/webhook)/.test(path)) {
         const { success } = await env.RL_API.limit({ key: clientIp(req) });
         if (!success) return new Response(JSON.stringify({ error: 'Too many requests. Please slow down.' }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '30', ...SEC } });
       }
@@ -419,7 +420,22 @@ export default {
         if (prev && prev.stale_alerted) await alertOwners(env, 'The outside site monitor is reporting again.');
         return json({ ok: true });
       }
-      if (path === '/api/config') return json({ shop: await shopStatus(env), center: { lat: num(env.SHOP_LAT, -0.1671), lng: num(env.SHOP_LNG, 35.966) }, payments_mode: env.PAYMENTS_MODE, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
+      // WhatsApp webhook. GET = Meta's one-time verification; POST = incoming messages, accepted only with a valid signature.
+      if (path === '/api/whatsapp/webhook') {
+        if (method === 'GET') {
+          const ok = url.searchParams.get('hub.mode') === 'subscribe' && env.WA_VERIFY_TOKEN && safeEq(url.searchParams.get('hub.verify_token') || '', env.WA_VERIFY_TOKEN);
+          return ok ? new Response(url.searchParams.get('hub.challenge') || '', { status: 200, headers: { 'content-type': 'text/plain', ...SEC } }) : json({ error: 'Forbidden' }, 403);
+        }
+        if (method === 'POST') {
+          const raw = await req.text();
+          if (!(await verifySignature(env, raw, req.headers.get('x-hub-signature-256')))) return json({ error: 'Forbidden' }, 403);
+          let body = null; try { body = JSON.parse(raw); } catch { /* not JSON */ }
+          await processWebhook(env, body);
+          return json({ ok: true });
+        }
+      }
+
+      if (path === '/api/config') return json({ shop: await shopStatus(env), center: { lat: num(env.SHOP_LAT, -0.1671), lng: num(env.SHOP_LNG, 35.966) }, payments_mode: env.PAYMENTS_MODE, whatsapp: String(env.WHATSAPP_NUMBER || '').replace(/\D/g, '') || null, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
       if (path === '/api/quote' && method === 'GET') {
         const la = url.searchParams.get('lat'), ln = url.searchParams.get('lng');
         if (la === null || ln === null) return json(deliveryQuote(env, null, null));
@@ -573,7 +589,7 @@ export default {
           }
           await env.DB.prepare("UPDATE orders SET status = 'cancelled', offered_to = NULL, offer_expires = NULL WHERE id = ? AND status IN ('paid', 'assigned')").bind(o.id).run();
           if (prev) await env.DB.prepare('UPDATE riders SET busy = 0 WHERE id = ?').bind(prev).run();
-          await sendSms(env, o.phone, `Order ${o.id} was cancelled. If you were charged, we will refund you.`);
+          await notifyCustomer(env, o.phone, `Order ${o.id} was cancelled. If you were charged, we will refund you.`, sendSms);
           await dispatchQueue(env);
           return json({ ok: true, refund: { order: o.id, phone: o.phone, amount_kes: o.total_kes, receipt: o.mpesa_receipt, was } });
         }
@@ -690,6 +706,8 @@ export default {
           return json({ ok: true });
         }
         if (path === '/api/admin/monitor') return json((await env.DB.prepare('SELECT ts, ok, detail, stale_alerted FROM monitor_beat WHERE id = 1').first()) || { ts: null });
+        if (path === '/api/admin/payments/check') return json(await checkPayments(env));
+        if (path === '/api/admin/whatsapp') return json((await env.DB.prepare('SELECT * FROM wa_log ORDER BY id DESC LIMIT 100').all()).results);
         if (path === '/api/admin/sms') return json((await env.DB.prepare('SELECT * FROM sms_log ORDER BY id DESC LIMIT 100').all()).results);
       }
       return json({ error: 'Not found' }, 404);

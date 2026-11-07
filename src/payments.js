@@ -7,15 +7,36 @@
 const darajaBase = (env) => (env.DARAJA_ENV === 'production' ? 'https://api.safaricom.co.ke' : 'https://sandbox.safaricom.co.ke');
 const timestamp = () => new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
 
+const DARAJA_REQUIRED = ['DARAJA_KEY', 'DARAJA_SECRET', 'DARAJA_SHORTCODE', 'DARAJA_TILL', 'DARAJA_PASSKEY', 'CALLBACK_SECRET', 'PUBLIC_URL'];
+const TIMEOUT_MS = 15000; // never let a slow provider hang an order request
+let darajaCache = { token: null, exp: 0 };
+
 async function darajaToken(env) {
+  if (darajaCache.token && Date.now() < darajaCache.exp) return darajaCache.token;
   const res = await fetch(darajaBase(env) + '/oauth/v1/generate?grant_type=client_credentials', {
     headers: { Authorization: 'Basic ' + btoa(env.DARAJA_KEY + ':' + env.DARAJA_SECRET) },
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!res.ok) throw new Error('daraja oauth ' + res.status);
-  return (await res.json()).access_token;
+  const d = await res.json();
+  darajaCache = { token: d.access_token, exp: Date.now() + Math.max(60, Number(d.expires_in || 3599) - 120) * 1000 };
+  return darajaCache.token;
+}
+
+// Go-live check for the owner: lists missing settings and proves the Daraja key and secret work. Never returns a secret.
+export async function checkPayments(env) {
+  const missing = DARAJA_REQUIRED.filter((k) => !String(env[k] || '').trim());
+  const out = { mode: env.PAYMENTS_MODE, daraja_env: env.DARAJA_ENV || 'sandbox', missing, oauth: null, callback_url: env.PUBLIC_URL ? env.PUBLIC_URL + '/api/mpesa/callback/<CALLBACK_SECRET>' : null, ready: false };
+  if (!missing.includes('DARAJA_KEY') && !missing.includes('DARAJA_SECRET')) {
+    try { darajaCache = { token: null, exp: 0 }; await darajaToken(env); out.oauth = 'ok'; } catch (e) { out.oauth = 'failed: ' + String(e.message).slice(0, 80); }
+  }
+  out.ready = env.PAYMENTS_MODE === 'daraja' && !missing.length && out.oauth === 'ok';
+  return out;
 }
 
 async function mpesaPush(env, { orderId, phone, amount }) {
+  const missing = DARAJA_REQUIRED.filter((k) => !String(env[k] || '').trim());
+  if (missing.length) throw new Error('daraja not configured: ' + missing.join(', '));
   const ts = timestamp();
   // For a Till (Buy Goods): BusinessShortCode = the store number, PartyB = the till number.
   const res = await fetch(darajaBase(env) + '/mpesa/stkpush/v1/processrequest', {
@@ -26,7 +47,7 @@ async function mpesaPush(env, { orderId, phone, amount }) {
       Password: btoa(env.DARAJA_SHORTCODE + env.DARAJA_PASSKEY + ts),
       Timestamp: ts,
       TransactionType: 'CustomerBuyGoodsOnline',
-      Amount: amount,
+      Amount: Math.round(amount),
       PartyA: phone,
       PartyB: env.DARAJA_TILL,
       PhoneNumber: phone,
@@ -34,8 +55,9 @@ async function mpesaPush(env, { orderId, phone, amount }) {
       AccountReference: orderId.slice(0, 12),
       TransactionDesc: 'Order',
     }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (data.ResponseCode !== '0') throw new Error('stk rejected: ' + JSON.stringify(data));
   return { checkoutRequestId: data.CheckoutRequestID };
 }
@@ -51,9 +73,11 @@ async function mpesaQuery(env, checkoutRequestId) {
       Timestamp: ts,
       CheckoutRequestID: checkoutRequestId,
     }),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  const data = await res.json();
-  if (data.ResultCode === undefined) return null;
+  const data = await res.json().catch(() => ({}));
+  // While the customer is still deciding Safaricom answers with an errorCode (e.g. 500.001.1001) and no ResultCode: ask again next run.
+  if (data.ResultCode === undefined || data.ResultCode === '') return null;
   return { resultCode: Number(data.ResultCode), receipt: null, amount: null };
 }
 

@@ -133,6 +133,9 @@
   .box b { font: 700 14px/1.4 var(--wide); }
   .demo { background: #14110a; border: 1px dashed #8a6d1d; color: #e8d9a8; }
   .demo button { width: 100%; margin-top: 8px; font: 700 12px var(--wide); padding: 13px; cursor: pointer; border-radius: 999px; border: 1px solid #8a6d1d; background: transparent; color: #f2e4b4; }
+  .wa { position: fixed; right: 14px; bottom: 14px; z-index: 12; width: 52px; height: 52px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(5,5,5,.72); border: 1px solid var(--line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .wa svg { width: 26px; height: 26px; fill: #fff; }
+  .wa:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .closedbar { position: fixed; top: 56px; left: 0; right: 0; z-index: 9; background: #3a0f16; color: #ffb3bd; padding: 11px 22px; font: 500 13px/1.4 var(--body); border-bottom: 1px solid #6b1c28; }
   #down { display: none; text-align: center; padding: 18vh 24px; color: #ddd; line-height: 1.6; }
   #down h2 { font: 400 52px/1 var(--script); color: #fff; margin: 0 0 12px; }
@@ -154,7 +157,7 @@
   <div id="tips" role="region" aria-label="How it works">
     <b>How it works</b>
     <ol>
-      <li>Pick a flavor and tap Order</li>
+      <li>Pick a flavor or gear and tap Order</li>
       <li>Enter your phone number and where you are</li>
       <li>Approve the payment prompt on your phone</li>
       <li>A rider brings it to you</li>
@@ -165,6 +168,7 @@
   <main class="rows" id="rl-rows" aria-label="Shisha flavors"></main>
 </div>
 
+<a class="wa" id="wa" href="#" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 4.54 0 8.24 3.7 8.24 8.24s-3.7 8.24-8.24 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.29z"/></svg></a>
 <div class="cover" id="rl-cover"></div>
 <section class="detail" id="rl-detail" aria-label="Flavour" hidden>
   <button class="back" id="rl-back" type="button"><svg viewBox="0 0 9 15"><path d="M8 1 1.5 7.5 8 14"/></svg>All flavours</button>
@@ -299,6 +303,37 @@ function packArt(f, cls, size) {
     </g></g>
   </svg>`;
   }
+  if (size === 'gear') {
+    // Gear: a comic-style hookah (base, stem, tray, bowl, hose). Same ink, cel shading and halftone as the packs.
+    const ink = '#0b0b0b';
+    return `<svg class="tube gear ${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)}"><defs>
+    <pattern id="${id}h" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3.5" cy="3.5" r="1.6" fill="#000" fill-opacity=".38"/></pattern></defs>
+    <ellipse class="tsh" cx="150" cy="381" rx="84" ry="8" fill="#000" fill-opacity=".38"/>
+    <g class="fl"><g transform="rotate(-6 150 200)">
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" transform="translate(5 5)" fill="none" stroke="${shade(c, -.6)}" stroke-width="9" stroke-linecap="round"/>
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" fill="none" stroke="${ink}" stroke-width="13" stroke-linecap="round"/>
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" fill="none" stroke="${mid}" stroke-width="6" stroke-linecap="round" stroke-dasharray="9 4"/>
+      <path d="M206 288l14-6 6 14-14 6z" fill="#d9d9d9" stroke="${ink}" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M128 46h44l-6 22h-32z" transform="translate(5 5)" fill="${shade(c, -.6)}"/>
+      <path d="M126 46h48l-7 24h-34z" fill="#3a3a3a" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M134 52h14l-2 12h-10z" fill="#ff7a1a"/><path d="M152 52h12l-2 12h-8z" fill="#ffb347"/>
+      <path d="M108 70h84l-8 14h-68z" fill="#cfcfcf" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/><path d="M116 74h40" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M140 84h20v82h-20z" fill="#bdbdbd" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/><path d="M144 88v74" stroke="#fff" stroke-opacity=".8" stroke-width="3"/>
+      <path d="M92 136h116l-10 14h-96z" fill="#e0e0e0" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" transform="translate(7 7)" fill="${shade(c, -.6)}" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path id="${id}v" d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" fill="${c}"/>
+      <clipPath id="${id}c"><use href="#${id}v"/></clipPath>
+      <g clip-path="url(#${id}c)">
+        <path d="M176 150Q214 240 168 330H240V150z" fill="${shade(c, -.28)}"/><path d="M176 150Q214 240 168 330H240V150z" fill="url(#${id}h)"/>
+        <path d="M72 232Q70 292 100 318" fill="none" stroke="${hi}" stroke-width="9" stroke-linecap="round"/>
+        <path d="M60 252Q150 276 240 252V268Q150 292 60 268z" fill="${hi}" fill-opacity=".35"/>
+      </g>
+      <path d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M118 166Q150 176 182 166" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>
+      <path d="M100 340h100l8 18h-116z" fill="#cfcfcf" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+    </g></g>
+  </svg>`;
+  }
   // Packet: a comic-style (inked, cel-shaded, halftone) stand-up zip pouch with a holographic window. Design is our own.
   const words = String(f.name).trim().toUpperCase().split(/\s+/), l1 = esc(words[0] || ''), l2 = esc(words.slice(1).join(' '));
   const fs = Math.max(12, Math.min(27, Math.floor(138 / Math.max(l1.length, l2.length, 1) * 1.55)));
@@ -346,11 +381,11 @@ let openRail = null, detailBusy = false, clone = null;
 function makeRail(size, label, price, hintUp, hintDown) {
   const row = document.createElement('section'); row.className = 'row'; row.setAttribute('aria-label', label);
   row.innerHTML = `<div class="bg"></div><div class="bgw"></div><div class="vig"></div>
-    <div class="head" aria-live="polite"><p>${label} \u00b7 ${KES(price)}</p><h1></h1><div class="spec"></div></div>
+    <div class="head" aria-live="polite"><p>${label}${price ? ' \u00b7 ' + KES(price) : ''}</p><h1></h1><div class="spec"></div></div>
     <div class="rail" role="list"></div>
     <button class="ar l" type="button" aria-label="Previous flavor"><svg viewBox="0 0 9 15"><path d="M8 1 1.5 7.5 8 14"/></svg></button>
     <button class="ar r" type="button" aria-label="Next flavor"><svg viewBox="0 0 9 15"><path d="M1 1l6.5 6.5L1 14"/></svg></button>
-    <div class="scrollhint">${hintUp || hintDown}<i>${hintUp ? '&#8593;' : '&#8595;'}</i></div>`;
+    <div class="scrollhint">${hintDown || hintUp}<i>${hintDown ? '&#8595;' : '&#8593;'}</i></div>`;
   $('rl-rows').appendChild(row);
   const R = { size, row, p: 0, target: 0, active: 0, raf: 0, bgAnim: null, bgColor: null, dragging: false };
   const rail = row.querySelector('.rail'), bg = row.querySelector('.bg'), bgw = row.querySelector('.bgw');
@@ -375,7 +410,7 @@ function makeRail(size, label, price, hintUp, hintDown) {
   R.setActive = (dir) => {
     const it = R.items[R.active];
     row.querySelector('h1').textContent = it.f.name;
-    row.querySelector('.spec').textContent = `${KES(it.s.price_kes)} \u00b7 ${size === 'packet' ? 'Packet' : 'Sample'}`;
+    row.querySelector('.spec').textContent = `${KES(it.s.price_kes)} \u00b7 ${sizeName(size)}`;
     R.switchBg(bgOf(it.f), dir);
   };
   // The background switches colour when the user swipes: a wipe in the direction of travel.
@@ -412,11 +447,13 @@ function makeRail(size, label, price, hintUp, hintDown) {
   row.querySelector('.ar.l').onclick = () => R.step(-1); row.querySelector('.ar.r').onclick = () => R.step(1);
   rails.push(R); return R;
 }
+const SIZE_ROWS = [['sample', 'Samples', 'Sample'], ['packet', 'Packets', 'Packet'], ['gear', 'Gear', 'Gear']];
+const sizeName = (k) => (SIZE_ROWS.find((r) => r[0] === k) || [0, 0, k])[2];
 function buildRows() {
   const prices = {};
   flavors.forEach((f) => f.sizes.forEach((s) => { if (!prices[s.size]) prices[s.size] = s.price_kes; }));
-  const have = ['sample', 'packet'].filter((k) => prices[k]);
-  have.forEach((k, i) => makeRail(k, k === 'packet' ? 'Packets' : 'Samples', prices[k], i > 0 ? 'Samples above' : '', i === 0 && have.length > 1 ? 'Packets below' : ''));
+  const have = SIZE_ROWS.filter((r) => prices[r[0]]);
+  have.forEach((r, i) => makeRail(r[0], r[1], r[0] === 'gear' ? 0 : prices[r[0]], i > 0 ? have[i - 1][1] + ' above' : '', i < have.length - 1 ? have[i + 1][1] + ' below' : ''));
 }
 const curRail = () => rails[Math.round($('rl-rows').scrollTop / $('rl-rows').clientHeight)] || rails[0];
 
@@ -424,7 +461,7 @@ const curRail = () => rails[Math.round($('rl-rows').scrollTop / $('rl-rows').cli
 const tgtFor = (w, h) => { const vw = innerWidth, vh = innerHeight, th = Math.min(vh * .5, vw >= 900 ? vh * .62 : vh * .5); const S = th / h; return { dx: vw / 2 - (vw >= 900 ? vw * .3 : vw / 2), dy: vh * .34, S }; };
 function place(R) { const it = R.items[R.active]; return it; }
 function fillDetail(R) { const it = R.items[R.active]; $('rl-dn').textContent = it.f.name; $('rl-ds').textContent = `${size2(R)} \u00b7 ${KES(it.s.price_kes)}`; $('rl-oa').textContent = 'Order ' + it.f.name; $('rl-dsub').textContent = `${size2(R)[0] + size2(R).slice(1).toLowerCase()} ${KES(it.s.price_kes)} \u00b7 Delivered to Kabarak`; $('rl-db').textContent = it.f.blurb; }
-const size2 = (R) => (R.size === 'packet' ? 'PACKET' : 'SAMPLE');
+const size2 = (R) => sizeName(R.size).toUpperCase();
 async function openDetail(R) {
   if (detailBusy || openRail) return; detailBusy = true; openRail = R;
   const it = R.items[R.active], act = R.sleeves[R.active], r = act.getBoundingClientRect(), vw = innerWidth, vh = innerHeight;
@@ -499,10 +536,15 @@ function updateTotal() {
   const fee = deliveryFee();
   $('total').textContent = picked && q >= 1 ? 'Total: ' + KES(picked.size.price_kes * q + fee) + ` (items ${KES(picked.size.price_kes * q)} + delivery ${KES(fee)}${quote && quote.km != null ? ', ' + quote.km + ' km' : ''})` : '';
 }
+function showWhatsApp() {
+  const a = $('wa'), n = config && config.whatsapp;
+  if (!n) { a.style.display = 'none'; return; }
+  a.href = 'https://wa.me/' + n + '?text=' + encodeURIComponent('Hi, I would like to see the menu'); a.style.display = 'flex';
+}
 function openOrder(flavor, size) {
   picked = { flavor, size }; quote = null;
   clearInterval(timer); orderId = null;
-  $('dsub').textContent = `${flavor.name}, ${size.size === 'packet' ? 'packet' : 'sample'} (${KES(size.price_kes)} each)`;
+  $('dsub').textContent = `${flavor.name}${size.size === 'gear' ? '' : ', ' + sizeName(size.size).toLowerCase()} (${KES(size.price_kes)} each)`;
   $('msg').textContent = ''; $('msg').className = ''; $('demo').style.display = 'none'; $('go').disabled = false;
   $('q').value = 1; phoneHint();
   showForm(); setupProviders();
@@ -682,7 +724,7 @@ function showClosed() { const b = $('closed'), c = config.shop && !config.shop.o
   try {
     const [h, f, c] = await Promise.all([api('/api/health'), api('/api/flavors'), api('/api/config')]);
     if (!h.ok || !h.data.ok || !f.ok || !f.data.length) throw new Error('unavailable');
-    flavors = f.data; config = c.data;
+    flavors = f.data; config = c.data; showWhatsApp();
     showClosed();
     buildRows();
     setInterval(async () => { const r = await api('/api/config'); if (r.ok) { config = r.data; showClosed(); } }, 5 * 60 * 1000);
