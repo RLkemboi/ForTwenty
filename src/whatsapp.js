@@ -64,10 +64,10 @@ const has = (t, ...words) => words.some((w) => (w.length >= 5 || w.includes(' ')
 async function catalogue(env) {
   const fl = (await env.DB.prepare('SELECT id, name FROM flavors WHERE active = 1 ORDER BY sort, id').all()).results;
   const pr = (await env.DB.prepare('SELECT flavor_id, size, price_kes FROM products WHERE active = 1 AND flavor_id IS NOT NULL ORDER BY price_kes').all()).results;
-  const lines = { sample: [], packet: [], gear: [] };
+  const lines = { sample: [], packet: [], night: [], gear: [] };
   for (const f of fl) for (const p of pr.filter((x) => x.flavor_id === f.id)) (lines[p.size] || (lines[p.size] = [])).push(`${f.name} ${KES(p.price_kes)}`);
   const sec = (title, arr) => (arr && arr.length ? `*${title}*\n${arr.map((x) => '- ' + x).join('\n')}` : '');
-  return [sec('Samples', lines.sample), sec('Packets', lines.packet), sec('Hookah gear', lines.gear)].filter(Boolean).join('\n\n');
+  return [sec('Samples', lines.sample), sec('Packets', lines.packet), sec('Hookah rental (per night)', lines.night), sec('Hookah gear', lines.gear)].filter(Boolean).join('\n\n');
 }
 
 // Looks up the customer's own latest orders by the number they are writing from. Nothing about other customers is ever shown.

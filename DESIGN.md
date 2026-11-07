@@ -16,6 +16,7 @@ Status: LOCKED 2026-11-01. Change only on the owner's explicit request.
 - Same comic language for both: thick `#0b0b0b` ink outlines, flat cel shading with hard shadow shapes, halftone dots in shadow, white highlight streaks, a darker offset layer behind for thickness, flat comic ground shadow.
 - Samples (KSh 100): slim tilted cone with fibre texture in the flavour colour, rolled cream paper filter end with a small flavour band and a dark hollow tip.
 - Packets (KSh 600): stand-up zip pouch, chamfered shoulders, ribbed seal with tear notches, double zip line, pastel holographic window, flavour name in white with ink stroke.
+- Hookah rentals (priced per night, the order quantity is the number of nights): modern black hookah with one hose and a crystal vase, three sizes (small, medium, large); the item colour sits on the coals, ring and glass. Same ink outline and cel shading.
 - Only the front record floats (`.sleeve.on`). Depth dimming uses the `--sd` overlay, not CSS filters. No SVG noise filters (they caused lag). Do not use `--dim`: it is already a colour token.
 - Honour `prefers-reduced-motion`.
 
