@@ -104,7 +104,60 @@ INSERT OR IGNORE INTO products (id, name, price_kes, flavor_id, size) VALUES
   (7, 'Watermelon, sample', 100, 4, 'sample'), (8, 'Watermelon, packet', 600, 4, 'packet');
 INSERT OR IGNORE INTO riders (id, name, phone) VALUES (1, 'Demo rider 1', '254700000001'), (2, 'Demo rider 2', '254700000002');
 
+-- Step 12: hookah gear. Gear items are menu entries whose single size is 'gear', so the owner edits them in /admin Menu like flavours.
+-- Placeholder names and prices: real ones come from the client.
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Hookah', 'Complete hookah: base, stem, tray and bowl.', '#2f6f9f', 101, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Hookah');
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Coals', 'Quick-light coals, 10 pieces.', '#7a3b1d', 102, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Coals');
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Hose', 'Washable hose with mouthpiece.', '#8a2f6b', 103, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Hose');
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Foil', 'Pre-cut foil, 50 sheets.', '#5d6b73', 104, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Foil');
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Hookah, gear', 3500, id, 'gear', 1 FROM flavors WHERE name = 'Hookah' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Coals, gear', 300, id, 'gear', 1 FROM flavors WHERE name = 'Coals' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Hose, gear', 600, id, 'gear', 1 FROM flavors WHERE name = 'Hose' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Foil, gear', 100, id, 'gear', 1 FROM flavors WHERE name = 'Foil' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+
+-- Step 14: hookah rentals. Rentals are menu entries whose single size is 'night'; the order quantity is the number of nights.
+-- Placeholder prices (KES per night): the owner changes them in /admin Menu.
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Small hookah', 'Compact crystal vase hookah, for 1 to 2 people. Rented per night.', '#c2410c', 91, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Small hookah');
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Medium hookah', 'The all-rounder, for 3 to 5 people. Rented per night.', '#1b7f5a', 92, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Medium hookah');
+INSERT INTO flavors (name, blurb, color, sort, active)
+SELECT 'Large hookah', 'The party hookah, for 6 to 10 people. Rented per night.', '#5b3a9a', 93, 1 WHERE NOT EXISTS (SELECT 1 FROM flavors WHERE name = 'Large hookah');
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Small hookah, night', 800, id, 'night', 1 FROM flavors WHERE name = 'Small hookah' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Medium hookah, night', 1200, id, 'night', 1 FROM flavors WHERE name = 'Medium hookah' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+INSERT INTO products (name, price_kes, flavor_id, size, active)
+SELECT 'Large hookah, night', 1800, id, 'night', 1 FROM flavors WHERE name = 'Large hookah' AND NOT EXISTS (SELECT 1 FROM products WHERE flavor_id = flavors.id);
+
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS auth_fail (ip TEXT NOT NULL, ts INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS auth_fail_ip ON auth_fail(ip, ts);
+
+-- WhatsApp (see migrations/0013_whatsapp.sql)
+CREATE TABLE IF NOT EXISTS wa_log (
+  id INTEGER PRIMARY KEY,
+  to_phone TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wa_inbound (
+  id TEXT PRIMARY KEY,
+  phone TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wa_contacts (
+  phone TEXT PRIMARY KEY,
+  last_inbound INTEGER NOT NULL
+);

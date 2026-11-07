@@ -133,6 +133,9 @@
   .box b { font: 700 14px/1.4 var(--wide); }
   .demo { background: #14110a; border: 1px dashed #8a6d1d; color: #e8d9a8; }
   .demo button { width: 100%; margin-top: 8px; font: 700 12px var(--wide); padding: 13px; cursor: pointer; border-radius: 999px; border: 1px solid #8a6d1d; background: transparent; color: #f2e4b4; }
+  .wa { position: fixed; right: 14px; bottom: 14px; z-index: 12; width: 52px; height: 52px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(5,5,5,.72); border: 1px solid var(--line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .wa svg { width: 26px; height: 26px; fill: #fff; }
+  .wa:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .closedbar { position: fixed; top: 56px; left: 0; right: 0; z-index: 9; background: #3a0f16; color: #ffb3bd; padding: 11px 22px; font: 500 13px/1.4 var(--body); border-bottom: 1px solid #6b1c28; }
   #down { display: none; text-align: center; padding: 18vh 24px; color: #ddd; line-height: 1.6; }
   #down h2 { font: 400 52px/1 var(--script); color: #fff; margin: 0 0 12px; }
@@ -154,7 +157,7 @@
   <div id="tips" role="region" aria-label="How it works">
     <b>How it works</b>
     <ol>
-      <li>Pick a flavor and tap Order</li>
+      <li>Pick a flavor or gear and tap Order</li>
       <li>Enter your phone number and where you are</li>
       <li>Approve the payment prompt on your phone</li>
       <li>A rider brings it to you</li>
@@ -165,6 +168,7 @@
   <main class="rows" id="rl-rows" aria-label="Shisha flavors"></main>
 </div>
 
+<a class="wa" id="wa" href="#" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2zm0 18.15c-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.25-8.24 4.54 0 8.24 3.7 8.24 8.24s-3.7 8.24-8.24 8.24zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.17.25-.64.81-.78.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.17-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42h-.48c-.17 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.67-1.18.21-.58.21-1.07.14-1.18-.06-.1-.23-.16-.48-.29z"/></svg></a>
 <div class="cover" id="rl-cover"></div>
 <section class="detail" id="rl-detail" aria-label="Flavour" hidden>
   <button class="back" id="rl-back" type="button"><svg viewBox="0 0 9 15"><path d="M8 1 1.5 7.5 8 14"/></svg>All flavours</button>
@@ -182,7 +186,7 @@
       <button class="x" id="close" type="button" aria-label="Close">&times;</button>
     </div>
     <form id="f">
-      <label for="q">Quantity</label>
+      <label for="q" id="ql">Quantity</label>
       <div class="stepper">
         <button type="button" id="qm" aria-label="One less">&minus;</button>
         <input id="q" type="number" min="1" max="10" value="1" inputmode="numeric">
@@ -261,10 +265,217 @@ function shade(hex, amt) {
   const n = parseInt(m[1], 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v + amt * (amt < 0 ? v : 255 - v))));
   return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
 }
+// Rental hookah art: modern black hookah with a crystal vase, three sizes. Exposes only window.hookahArt.
+(function () {
+  var shade = function (hex, amt) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#444';
+    var n = parseInt(m[1], 16);
+    var f = function (v) { return Math.max(0, Math.min(255, Math.round(v + amt * (amt < 0 ? v : 255 - v)))); };
+    return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(function (v) { return f(v).toString(16).padStart(2, '0'); }).join('');
+  };
+  var N = 0, INK = '#0b0b0b', KL = '#f4f4f4';
+  var K = { a: '#0c0d10', d: '#6b727c', e: '#8a919c' };
+  var CH = { l: '#f1f3f6', m: '#bcc0c8', d: '#7d828c' };
+  var Z = {
+    large: { H: 338, u: 1, hw: 9, vh: 115, nw: 24, fw: 45, sp: 22, hub: 28, sw: 7.8 },
+    medium: { H: 284, u: .9, hw: 8.2, vh: 97, nw: 20, fw: 36, sp: 19, hub: 25, sw: 7.2 },
+    small: { H: 230, u: .8, hw: 7.2, vh: 80, nw: 16.5, fw: 28, sp: 17, hub: 22, sw: 6.6 }
+  };
+  function r(v) { return Math.round(v * 10) / 10; }
+  function r1(v) { return Math.round(v); }
+  function hm(T, y) {
+    var n = T.length, i = 0; while (i < n - 2 && y > T[i + 1][0]) i++;
+    var p0 = T[i], p1 = T[i + 1], s = (p1[1] - p0[1]) / (p1[0] - p0[0]);
+    var m0 = i > 0 ? (p1[1] - T[i - 1][1]) / (p1[0] - T[i - 1][0]) : s;
+    var m1 = i < n - 2 ? (T[i + 2][1] - p0[1]) / (T[i + 2][0] - p0[0]) : s;
+    var h = p1[0] - p0[0], t = Math.max(0, Math.min(1, (y - p0[0]) / h)), t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * p0[1] + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * p1[1] + (t3 - t2) * h * m1;
+  }
+  function samp(fn, y0, y1, n) { var a = []; for (var i = 0; i <= n; i++) { var y = y0 + (y1 - y0) * i / n; a.push([y, Math.max(0, fn(y))]); } return a; }
+  function r5(v) { return Math.round(v * 2) / 2; }
+  function ps(P, sg) { return P.map(function (p) { return r5(sg * p[1]) + ' ' + r5(p[0]); }); }
+  function outl(P) { return 'M' + ps(P, 1).join('L') + 'L' + ps(P.slice().reverse(), -1).join('L') + 'Z'; }
+  function shR(P, xa, xb) { var y0 = P[0][0], y1 = P[P.length - 1][0]; return 'M' + ps(P, 1).join('L') + 'L' + r(xb) + ' ' + r(y1) + 'L' + r(xa) + ' ' + r(y0) + 'Z'; }
+  function hlb(P, ins, a, b, wd, col, op) {
+    var n = P.length - 1, i0 = Math.round(a * n), i1 = Math.round(b * n), d = '';
+    for (var i = i0; i <= i1; i++) d += (i == i0 ? 'M' : 'L') + r(-P[i][1] + ins) + ' ' + r(P[i][0]);
+    return '<path class="L" d="' + d + '" stroke="' + col + '" stroke-width="' + wd + '"' + (op ? ' opacity="' + op + '"' : '') + '/>';
+  }
+  function rect(x, y, w, h) { return 'M' + r(x) + ' ' + r(y) + 'h' + r(w) + 'v' + r(h) + 'h' + r(-w) + 'Z'; }
+  function G(t, m, s) { var z = (t - m) / s; return Math.exp(-z * z); }
+
+  window.hookahArt = function (size, color, cls) {
+    var C = Z[size] || Z.large; if (!Z[size]) size = 'large';
+    var U = C.u, H = C.H, k = H / 338, hw = C.hw, sw = C.sw, nw = C.nw, fw = C.fw, vh = C.vh, hubH = C.hub, AX = 156;
+    var c = color || '#c2410c', lo = shade(c, -.4), hi = shade(c, .5), tint = shade(c, .78), gsh = shade(c, .5), gdot = shade(c, -.1), fglow = shade(c, .3);
+    var id = 'hk' + (++N), defs = '', DN = 0, sil = [], hose = [], pd = id + 'p', pq = id + 'q';
+    function def(d, t, tf) { var i = id + 'd' + (DN++); defs += '<path id="' + i + '" d="' + d + '"/>'; if (t !== undefined) sil.push([i, t, tf]); return i; }
+    function hdef(d, w) { var i = def(d); hose.push([i, w]); return i; }
+    function U0(i, fill) { return '<use href="#' + i + '" fill="' + fill + '"/>'; }
+    function OL(i, w) { return '<use class="O" href="#' + i + '" stroke-width="' + (w || 3) + '"/>'; }
+    function HL(d, w, col, op) { return '<path class="L" d="' + d + '" stroke="' + col + '" stroke-width="' + w + '"' + (op ? ' opacity="' + op + '"' : '') + '/>'; }
+    function blk(P, xa, xb, ins, hl, base, dark) {
+      var d = def(outl(P), 0), s = def(shR(P, xa, xb));
+      return U0(d, base) + U0(s, dark) + U0(s, 'url(#' + pq + ')') + OL(d) + hlb(P, 1.3, .06, .94, 1.5, K.e) + hlb(P, ins || 2.8, hl ? hl[0] : .15, hl ? hl[1] : .45, 1.5, '#e8ecf2');
+    }
+    // ---------- layout (design space: axis x=0, y=0 at coal top, base bottom y=H)
+    var py = .215 * H, rx = .175 * H, ry = rx * .12, edge = 3 + .5 * U;
+    var rg = py + ry + edge - 1.5, rgH = 5 * U, br = 8 * U, byc = rg + rgH + br - 1, sH = byc + br;
+    var Ls = H - sH - hubH + 3 - vh, shY = sH - 1, hy = sH + Ls - 1, vy = hy + hubH - 3;
+    var gE = py - 4, gS0 = gE - 24 * U, cS0 = 20 * U;
+    var out = [];
+    // ---------- hose geometry: one spiral, never crosses itself
+    function P2(x, y) { return [x * k, y * k]; }
+    function pt(a) { return r1(a[0]) + ' ' + r1(a[1]); }
+    function cub(a, b, c2, d) { return 'C' + pt(b) + ' ' + pt(c2) + ' ' + pt(d); }
+    function mid(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+    var G1 = P2(44, 172), p1 = P2(66, 168), p2 = P2(88, 152), p3 = P2(82, 132), p4 = P2(76, 112), p5 = P2(40, 108), p6 = P2(-10, 110);
+    var q1 = P2(-72, 108), q2 = P2(-118, 160), q3 = P2(-118, 222);
+    var s0 = P2(-118, 222), s1 = P2(-118, 288), s2 = P2(-70, 324), s3 = P2(-10, 324), t = .7;
+    var m01 = mid(s0, s1, t), m12 = mid(s1, s2, t), m23 = mid(s2, s3, t), m012 = mid(m01, m12, t), m123 = mid(m12, m23, t), spt = mid(m012, m123, t);
+    var f1 = P2(24, 324), f2 = P2(46, 324), W0 = P2(62, 324), Wt = P2(122, 350);
+    var dBack = 'M' + pt(G1) + cub(G1, p1, p2, p3) + cub(p3, p4, p5, p6) + cub(p6, q1, q2, q3) + cub(s0, m01, m012, spt);
+    var dFront = 'M' + pt(spt) + cub(spt, m123, m23, s3) + cub(s3, f1, f2, W0);
+    var hAll = hdef(dBack, hw), hF = hdef(dFront, hw);
+    var gx0 = r(6), gy0 = r(hy + 7);
+    var hG = hdef('M' + gx0 + ' ' + gy0 + 'L' + r(G1[0]) + ' ' + r(G1[1]), hw + 1.5);
+    var ww = r(hw * .72);
+    var hW = hdef('M' + pt(W0) + 'L' + pt(Wt), ww);
+    function hbody(i, w) {
+      return '<use class="h1" href="#' + i + '" stroke-width="' + w + '"/><use class="h2" href="#' + i + '" stroke-width="' + r(w * .42) + '"/><use class="h3" href="#' + i + '"/><use class="h4" href="#' + i + '"/>';
+    }
+    function hink(i, w) { return '<use href="#' + i + '" fill="none" stroke="' + INK + '" stroke-width="' + r(w + 5) + '" stroke-linecap="round"/>'; }
+    out.push(hink(hAll, hw) + hbody(hAll, hw));
+
+    // ---------- vase
+    var sb = .045 * vh, rth = .075 * vh, yr = vh - sb - rth, d_ = fw - nw;
+    var TT = [[0, nw], [.12 * vh, nw], [.3 * vh, nw - 1], [.48 * vh, nw + .14 * d_], [.64 * vh, nw + .42 * d_], [.8 * vh, nw + .8 * d_], [yr, fw]];
+    var VP = samp(function (y) { return hm(TT, y); }, 0, yr, Math.round(yr / 11));
+    var vbd = 'M' + ps(VP, 1).join('L') + 'Q0 ' + r(yr + 2 * sb) + ' ' + r(-fw) + ' ' + r(yr) + 'L' + ps(VP.slice().reverse(), -1).join('L') + 'Z';
+    var vtf = ' transform="translate(0 ' + r(vy) + ')"', vb = def(vbd, 1, vtf);
+    var f3 = fw + 3.5;
+    var rd = 'M' + r(-fw) + ' ' + r(yr) + 'L' + r(-f3) + ' ' + r(yr + 2) + 'L' + r(-f3) + ' ' + r(vh - sb) + 'Q0 ' + r(vh + sb) + ' ' + r(f3) + ' ' + r(vh - sb) + 'L' + r(f3) + ' ' + r(yr + 2) + 'L' + r(fw) + ' ' + r(yr) + 'Q0 ' + r(yr + 2 * sb) + ' ' + r(-fw) + ' ' + r(yr) + 'Z';
+    var rgd = def(rd, 1, vtf);
+    var glass = '<g transform="translate(0 ' + r(vy) + ')">' + U0(vb, tint);
+    var band = 'M' + ps(VP, 1).join('L') + 'L' + VP.slice().reverse().map(function (p) { return r(Math.max(p[1] - 8, 0)) + ' ' + r(p[0]); }).join('L') + 'Z';
+    var bd = def(band);
+    glass += U0(bd, gsh) + U0(bd, 'url(#' + pd + ')');
+    // dip tube (inside the glass)
+    var te = yr - 3;
+    glass += '<path d="' + rect(-3.6, 2, 7.2, te - 2) + '" fill="' + CH.m + '"/><path d="' + rect(.3, 2, 3.3, te - 2) + '" fill="' + CH.d + '"/><path d="' + rect(-3.6, 2, 7.2, te - 2) + '" fill="none" stroke="' + INK + '" stroke-width="2"/>' + HL('M-1.9 6V' + r(te - 10), 1.3, '#fff');
+    // bold lattice: two rows of big diamonds
+    var ya = .22 * vh, yb2 = yr + sb + 2, sp = C.sp, sx = .6, hgt = yb2 - ya, dA = '', dB = '', i;
+    for (i = Math.floor(-(fw + sx * hgt) / sp) - 1; i * sp <= fw + 2; i++) dA += 'M' + r(i * sp) + ' ' + r(ya) + 'l' + r(sx * hgt) + ' ' + r(hgt);
+    for (i = Math.floor(-(fw + 2) / sp) - 1; i * sp <= fw + sx * hgt; i++) dB += 'M' + r(i * sp) + ' ' + r(ya) + 'l' + r(-sx * hgt) + ' ' + r(hgt);
+    var lt = def(dA + dB);
+    glass += '<clipPath id="' + id + 'c"><use href="#' + vb + '"/></clipPath><g clip-path="url(#' + id + 'c)" fill="none" stroke-linecap="round">' +
+      '<use href="#' + lt + '" stroke="' + gdot + '" stroke-width="1.2" transform="translate(1.4 1.2)"/>' +
+      '<use href="#' + lt + '" stroke="#fff" stroke-width="2"/>' +
+      '<path d="M' + r(-fw) + ' ' + r(ya) + 'Q0 ' + r(ya + 4) + ' ' + r(fw) + ' ' + r(ya) + '" stroke="#fff" stroke-width="2"/></g>';
+    glass += OL(vb, 3);
+    // thick foot ring (light glass, flat)
+    glass += U0(rgd, shade(c, .88)) + '<clipPath id="' + id + 'r"><use href="#' + rgd + '"/></clipPath><g clip-path="url(#' + id + 'r)"><path d="' + rect(f3 * .35, yr - 2, f3, rth + sb * 2 + 6) + '" fill="' + gsh + '"/><path d="' + rect(f3 * .35, yr - 2, f3, rth + sb * 2 + 6) + '" fill="url(#' + pd + ')"/></g>';
+    glass += OL(rgd, 3) + '<path class="O" d="M' + r(-fw) + ' ' + r(yr) + 'Q0 ' + r(yr + 2 * sb) + ' ' + r(fw) + ' ' + r(yr) + '" stroke-width="1.6"/>';
+    var sk = samp(function (y) { return hm(TT, y); }, .26 * vh, .84 * vh, 8);
+    glass += hlb(sk, 4.2, 0, 1, 4, '#fff') + HL('M' + r(-nw + 4) + ' 7V' + r(.2 * vh), 3, '#fff') + HL('M' + r(-f3 + 3) + ' ' + r(vh - sb - rth + 4) + 'V' + r(vh - sb - 3), 3, '#fff') +
+      HL('M' + r(-nw * .35) + ' ' + r(.32 * vh) + 'l' + r(fw * .2) + ' ' + r(.28 * vh), 2.4, '#fff');
+    glass += '</g>';
+    out.push(glass);
+
+    // ---------- shaft, rings, bead, hub
+    var shP = samp(function (y) { var t = (y - shY) / (Ls + 1); return sw * (.92 + .1 * G(t, .1, .07) + .14 * G(t, .93, .09)); }, shY, shY + Ls + 1, 6);
+    var w0 = shP[shP.length - 1][1], R = nw + 4, hP = [], j;
+    for (j = 0; j <= 6; j++) { var tt = j / 6 * .86; hP.push([hy + tt * hubH, w0 + (R - w0) * Math.pow(tt / .86, 1.8)]); }
+    hP.push([hy + .86 * hubH + .1, R + 1.8], [hy + hubH, R + 1.8]);
+    var STEM = '#1c1f24', STD = '#0b0c0e';
+    var shaftS = blk(shP, 2, 2.4, 3, null, STEM, STD);
+    var cy1 = shY + .52 * Ls, cy2 = shY + .2 * Ls, rw1 = sw + 3.4, rw2 = sw + 2.2;
+    var chr = def(rect(-rw1, cy1 - 2.5, 2 * rw1, 5), 0), acc = def(rect(-rw2, cy2 - 1.7, 2 * rw2, 3.4), 0);
+    shaftS += U0(chr, CH.m) + '<path d="' + rect(rw1 * .3, cy1 - 2.5, rw1 * .7, 5) + '" fill="' + CH.d + '"/>' + OL(chr, 2.4) + HL('M' + r(-rw1 + 2) + ' ' + r(cy1 - 1) + 'h' + r(rw1 * .8), 1.2, '#fff');
+    shaftS += U0(acc, c) + '<path d="' + rect(rw2 * .25, cy2 - 1.7, rw2 * .75, 3.4) + '" fill="' + lo + '"/>' + OL(acc, 2.2) + HL('M' + r(-rw2 + 2) + ' ' + r(cy2 - .6) + 'h4', 1, '#fff');
+    var bP = samp(function (y) { var z = (y - byc) / br; return br * Math.sqrt(Math.max(0, 1 - z * z)); }, byc - br, byc + br, 8);
+    var beadS = blk(bP, br * .22, br * .22, br * .5, [.18, .5], STEM, STD);
+    var rgw = 12 * U, rgd2 = def(rect(-rgw, rg, 2 * rgw, rgH), 0);
+    var ringS = U0(rgd2, CH.m) + '<path d="' + rect(rgw * .3, rg, rgw * .7, rgH) + '" fill="' + CH.d + '"/>' + OL(rgd2, 2.6) + HL('M' + r(-rgw + 2.5) + ' ' + r(rg + 1.3) + 'h' + r(rgw * .7), 1.3, '#fff');
+    var hubS = blk(hP, 3.5, R * .42, 3.2, [.05, .4], '#14161a', '#07080a');
+    hubS += HL('M' + r(-R - 1.8) + ' ' + r(hy + .86 * hubH) + 'h' + r(2 * R + 3.6), 1.5, K.e) + HL('M' + r(-w0) + ' ' + r(hy + .6) + 'h' + r(2 * w0), 1.6, CH.m);
+    out.push(shaftS + beadS + ringS + hubS);
+
+    // ---------- plate
+    var plate = 'M' + r(-rx) + ' ' + r(py) + 'L' + r(-rx) + ' ' + r(py + edge) + 'A' + r(rx) + ' ' + r(ry) + ' 0 0 0 ' + r(rx) + ' ' + r(py + edge) + 'L' + r(rx) + ' ' + r(py) + 'A' + r(rx) + ' ' + r(ry) + ' 0 0 0 ' + r(-rx) + ' ' + r(py) + 'Z';
+    var pl = def(plate, 0), top = def('M' + r(-rx) + ' ' + r(py) + 'A' + r(rx) + ' ' + r(ry) + ' 0 1 0 ' + r(rx) + ' ' + r(py) + 'A' + r(rx) + ' ' + r(ry) + ' 0 1 0 ' + r(-rx) + ' ' + r(py) + 'Z');
+    var xs = .4 * rx, yy = ry * Math.sqrt(1 - .16), psd = def('M' + r(xs) + ' ' + r(py - yy) + 'A' + r(rx) + ' ' + r(ry) + ' 0 0 1 ' + r(xs) + ' ' + r(py + yy) + 'Z');
+    var plateS = U0(pl, '#14161a') + U0(top, '#2a2d33') + U0(psd, '#15171b') + U0(psd, 'url(#' + pq + ')') +
+      OL(pl, 3) + '<use href="#' + top + '" fill="none" stroke="' + INK + '" stroke-width="1.5"/>' +
+      HL('M' + r(-rx + 1.5) + ' ' + r(py + .6) + 'A' + r(rx - 1.5) + ' ' + r(ry - .8) + ' 0 0 0 ' + r(rx - 1.5) + ' ' + r(py + .6), 1.6, CH.l) +
+      HL('M' + r(-.866 * rx * .9) + ' ' + r(py - .5 * ry * .9) + 'A' + r(rx * .9) + ' ' + r(ry * .9) + ' 0 0 1 ' + r(-.342 * rx * .9) + ' ' + r(py - .94 * ry * .9), 1.5, K.e);
+    out.push(plateS);
+
+    // ---------- bowl: grommet, cup, lip, coals
+    var rb = 6 * U, gP = samp(function (y) { return (10.4 + 2.8 * Math.abs(Math.sin((y - gS0) / rb * Math.PI))) * U; }, gS0, gE, 16);
+    var BW = '#20232a', BD = '#0c0d10';
+    var gS = blk(gP, 2.5, 3, 4, [.1, .4], BW, BD), gi = '';
+    for (j = 1; j < 4; j++) gi += 'M' + r(-10.4 * U) + ' ' + r(gS0 + rb * j) + 'h' + r(20.8 * U);
+    gS += '<path d="' + gi + '" fill="none" stroke="' + INK + '" stroke-width="1.6"/>';
+    var cT = [[cS0, 25 * U], [cS0 + .4 * (gS0 - cS0), 23.5 * U], [gS0, 17.5 * U]];
+    var cP = samp(function (y) { return hm(cT, y); }, cS0, gS0, 6);
+    var cS = blk(cP, 7 * U, 5 * U, 3.5, [.15, .6], BW, BD);
+    var lipd = def(rect(-28 * U, 15 * U, 56 * U, 5 * U), 0), nub = def(rect(27 * U, 16 * U, 10 * U, 3 * U), 0);
+    var lipS = U0(nub, CH.m) + OL(nub, 2.2) + U0(lipd, CH.m) + '<path d="' + rect(8 * U, 15 * U, 20 * U, 5 * U) + '" fill="' + CH.d + '"/>' + OL(lipd, 2.8) + HL('M' + r(-23 * U) + ' ' + r(16.7 * U) + 'h' + r(15 * U), 1.4, '#fff');
+    var halo = '<ellipse cx="0" cy="' + r(7 * U) + '" rx="' + r(32 * U) + '" ry="' + r(12.5 * U) + '" fill="' + lo + '"/><ellipse cx="0" cy="' + r(7 * U) + '" rx="' + r(26 * U) + '" ry="' + r(9.5 * U) + '" fill="' + c + '"/>';
+    function cube(cx, yb, s) {
+      var q = function (a) { return a.map(function (p) { return r5(cx + p[0] * s) + ' ' + r5(yb + p[1] * s); }).join('L'); };
+      var hx = def('M' + q([[-.5, 0], [.2, 0], [.5, -.22], [.5, -.97], [-.2, -.97], [-.5, -.75]]) + 'Z', 0);
+      return '<path d="M' + q([[-.5, -.75], [.2, -.75], [.2, 0], [-.5, 0]]) + 'Z" fill="#2a2420"/>' +
+        '<path d="M' + q([[-.5, -.75], [.2, -.75], [.5, -.97], [-.2, -.97]]) + 'Z" fill="' + hi + '"/>' +
+        '<path d="M' + q([[.2, -.75], [.5, -.97], [.5, -.22], [.2, 0]]) + 'Z" fill="#1b1714"/>' +
+        '<ellipse cx="' + r(cx + .02 * s) + '" cy="' + r(yb - .86 * s) + '" rx="' + r(.2 * s) + '" ry="' + r(.06 * s) + '" fill="#fff"/>' +
+        '<path class="L" d="M' + q([[-.38, -.62], [-.1, -.42], [-.28, -.2], [-.12, -.04]]) + 'M' + q([[.33, -.5], [.38, -.3]]) + '" stroke="' + fglow + '" stroke-width="1.5" stroke-linejoin="round"/>' +
+        '<path class="O" d="M' + q([[-.5, -.75], [.2, -.75], [.5, -.97]]) + 'M' + q([[.2, -.75], [.2, 0]]) + '" stroke-width="1.4"/>' + OL(hx, 2.4);
+    }
+    var coals = cube(4 * U, 8 * U, 14 * U) + cube(-18 * U, 16 * U, 16 * U) + cube(17 * U, 15.5 * U, 15 * U) + cube(0, 15 * U, 19 * U);
+    var wisp = '<path transform="translate(' + r(3 * U) + ' ' + r(-2 * U) + ') scale(' + r(1.2 * U) + ')" d="M-1 0C-6 -5 7 -8 1 -12C-5 -16 3 -19 7 -18C3 -17 0 -15 2 -12C8 -8 -2 -5 4 0Z" fill="#f3f6fa" stroke="' + INK + '" stroke-width="1.3" stroke-linejoin="round"/>';
+    out.push(gS + cS + halo + lipS + coals + wisp);
+
+    // ---------- front hose, grip, wand
+    out.push(hink(hF, hw) + hbody(hF, hw));
+    var dx = Wt[0] - W0[0], dy = Wt[1] - W0[1], ln = Math.sqrt(dx * dx + dy * dy), ux = dx / ln, uy = dy / ln;
+    function seg(x0, y0, x1, y1) { return 'M' + r(x0) + ' ' + r(y0) + 'L' + r(x1) + ' ' + r(y1); }
+    var gdx = G1[0] - 6, gdy = G1[1] - (hy + 7), gl = Math.sqrt(gdx * gdx + gdy * gdy), gux = gdx / gl, guy = gdy / gl;
+    var gS2 = '<use href="#' + hG + '" fill="none" stroke="' + INK + '" stroke-width="' + r(hw + 6.5) + '"/>' +
+      '<use href="#' + hG + '" fill="none" stroke="#3b414a" stroke-width="' + r(hw + 1.5) + '"/>' +
+      '<use href="#' + hG + '" fill="none" stroke="#14161a" stroke-width="' + r(hw + 1.5) + '" stroke-dasharray="2 3.2"/>' +
+      HL(seg(6 + 2, hy + 7 - 5, G1[0] - 8, G1[1] - 5), 1.4, '#aab1bc') +
+      '<path d="' + seg(G1[0] - 6 * gux, G1[1] - 6 * guy, G1[0] + 1.5 * gux, G1[1] + 1.5 * guy) + '" stroke="' + INK + '" stroke-width="' + r(hw + 6) + '" fill="none"/>' +
+      '<path d="' + seg(G1[0] - 5 * gux, G1[1] - 5 * guy, G1[0] + .5 * gux, G1[1] + .5 * guy) + '" stroke="' + CH.m + '" stroke-width="' + r(hw + 3) + '" fill="none"/>' +
+      '<path d="' + seg(G1[0] - 2.5 * gux, G1[1] - 2.5 * guy, G1[0] + .5 * gux, G1[1] + .5 * guy) + '" stroke="' + CH.d + '" stroke-width="' + r(hw + 3) + '" fill="none"/>';
+    var wS = hink(hW, ww) + hbody(hW, ww);
+    wS += '<path d="' + seg(W0[0], W0[1], W0[0] + 8 * ux, W0[1] + 8 * uy) + '" stroke="' + INK + '" stroke-width="' + r(ww + 6) + '" fill="none"/><path d="' + seg(W0[0], W0[1], W0[0] + 7 * ux, W0[1] + 7 * uy) + '" stroke="' + CH.m + '" stroke-width="' + r(ww + 3) + '" fill="none"/>' +
+      '<path d="' + seg(Wt[0] - 8 * ux, Wt[1] - 8 * uy, Wt[0] + 1.5 * ux, Wt[1] + 1.5 * uy) + '" stroke="' + INK + '" stroke-width="' + r(ww + 5) + '" fill="none"/><path d="' + seg(Wt[0] - 7 * ux, Wt[1] - 7 * uy, Wt[0], Wt[1]) + '" stroke="' + K.d + '" stroke-width="' + r(ww + 2) + '" fill="none"/>';
+    out.push(gS2 + wS);
+
+    // ---------- silhouette layers
+    var S0 = '', S1 = '', q;
+    for (q = 0; q < sil.length; q++) { var u = '<use href="#' + sil[q][0] + '"' + (sil[q][2] || '') + '/>'; if (sil[q][1] === 0) S0 += u; else if (sil[q][1] === 1) S1 += u; }
+    var SG = '<g id="' + id + 'a">' + S0 + '</g><g id="' + id + 'b">' + S1 + '</g>';
+    function lay(col, a, b, hx, att) {
+      var t = '<g' + att + ' stroke="' + col + '" stroke-linejoin="round" stroke-linecap="round"><use href="#' + id + 'a" fill="' + col + '" stroke-width="' + a + '"/><use href="#' + id + 'b" fill="none" stroke-width="' + b + '"/>';
+      hose.forEach(function (h) { t += '<use href="#' + h[0] + '" fill="none" stroke-width="' + r(h[1] + hx) + '"/>'; });
+      return t + '</g>';
+    }
+    var base = lay(INK, 3, 5, 5, ' transform="translate(5 5)" opacity=".4"') + lay(KL, 8, 8, 8, '') + lay(INK, 5, 5, 5, '');
+    var pats = '<pattern id="' + pd + '" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><circle cx="3.5" cy="3.5" r="1.8" fill="' + gdot + '"/></pattern>' +
+      '<pattern id="' + pq + '" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><circle cx="3.5" cy="3.5" r="1.8" fill="' + K.d + '"/></pattern>';
+    var gr = '<ellipse cx="' + AX + '" cy="381" rx="' + r((fw + 3.5) * 1.35) + '" ry="7.5" fill="#000" opacity=".6"/>';
+    return '<svg class="tube gear ' + (cls || '') + '" viewBox="0 0 300 400" role="img" aria-label="Hookah, ' + size + '"><style>.h1,.h2,.h3,.h4{fill:none}.h1{stroke:#3b414a}.h2{stroke:#1e2228;transform:translate(2px,2px)}.h3{stroke:#7b828d;stroke-width:3;stroke-dasharray:0 7;stroke-linecap:round;transform:translate(2.2px,2.2px)}.h4{stroke:#aab1bc;stroke-width:1.5;stroke-dasharray:44 8;stroke-linecap:round;transform:translate(-2px,-2px)}.O{fill:none;stroke:#0b0b0b;stroke-linejoin:round}.L{fill:none;stroke-linecap:round}</style><defs>' + pats + defs + SG + '</defs>' + gr +
+      '<g transform="translate(' + AX + ' 372) rotate(-4.5) translate(0 ' + (-H) + ')">' + base + out.join('') + '</g></svg>';
+  };
+})();
 // Stand-in product art until real photos exist: a tilted, floating cardboard tube tinted with the flavour colour.
 let artN = 0;
 function packArt(f, cls, size) {
   if (f.image) return `<img class="${cls || ''}" src="${esc(f.image)}" alt="${esc(f.name)}">`;
+  if (size === 'night') return window.hookahArt((/small|medium|large/i.exec(f.name) || ['medium'])[0].toLowerCase(), f.color, cls);
   const c = f.color || '#888', hi = shade(c, .42), mid = shade(c, .12), lo = shade(c, -.5), id = 't' + f.id + (cls || '') + (++artN);
   const nm = esc(String(f.name).trim().toUpperCase().slice(0, 16));
   if (size === 'sample') {
@@ -296,6 +507,37 @@ function packArt(f, cls, size) {
       <ellipse cx="26" cy="200" rx="8" ry="23" fill="${shade(c, -.6)}" stroke="${ink}" stroke-width="3.5"/>
       <path d="M24 190q4 4 1 9M23 205q4 3 2 8M27 195l3 2M21 210l4-1" stroke="${hi}" stroke-opacity=".7" stroke-width="1.6" stroke-linecap="round" fill="none"/>
       <path d="${B}" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+    </g></g>
+  </svg>`;
+  }
+  if (size === 'gear') {
+    // Gear: a comic-style hookah (base, stem, tray, bowl, hose). Same ink, cel shading and halftone as the packs.
+    const ink = '#0b0b0b';
+    return `<svg class="tube gear ${cls || ''}" viewBox="0 0 300 400" role="img" aria-label="${esc(f.name)}"><defs>
+    <pattern id="${id}h" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3.5" cy="3.5" r="1.6" fill="#000" fill-opacity=".38"/></pattern></defs>
+    <ellipse class="tsh" cx="150" cy="381" rx="84" ry="8" fill="#000" fill-opacity=".38"/>
+    <g class="fl"><g transform="rotate(-6 150 200)">
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" transform="translate(5 5)" fill="none" stroke="${shade(c, -.6)}" stroke-width="9" stroke-linecap="round"/>
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" fill="none" stroke="${ink}" stroke-width="13" stroke-linecap="round"/>
+      <path d="M232 196Q272 210 262 262Q252 300 214 292" fill="none" stroke="${mid}" stroke-width="6" stroke-linecap="round" stroke-dasharray="9 4"/>
+      <path d="M206 288l14-6 6 14-14 6z" fill="#d9d9d9" stroke="${ink}" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M128 46h44l-6 22h-32z" transform="translate(5 5)" fill="${shade(c, -.6)}"/>
+      <path d="M126 46h48l-7 24h-34z" fill="#3a3a3a" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M134 52h14l-2 12h-10z" fill="#ff7a1a"/><path d="M152 52h12l-2 12h-8z" fill="#ffb347"/>
+      <path d="M108 70h84l-8 14h-68z" fill="#cfcfcf" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/><path d="M116 74h40" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M140 84h20v82h-20z" fill="#bdbdbd" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/><path d="M144 88v74" stroke="#fff" stroke-opacity=".8" stroke-width="3"/>
+      <path d="M92 136h116l-10 14h-96z" fill="#e0e0e0" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" transform="translate(7 7)" fill="${shade(c, -.6)}" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path id="${id}v" d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" fill="${c}"/>
+      <clipPath id="${id}c"><use href="#${id}v"/></clipPath>
+      <g clip-path="url(#${id}c)">
+        <path d="M176 150Q214 240 168 330H240V150z" fill="${shade(c, -.28)}"/><path d="M176 150Q214 240 168 330H240V150z" fill="url(#${id}h)"/>
+        <path d="M72 232Q70 292 100 318" fill="none" stroke="${hi}" stroke-width="9" stroke-linecap="round"/>
+        <path d="M60 252Q150 276 240 252V268Q150 292 60 268z" fill="${hi}" fill-opacity=".35"/>
+      </g>
+      <path d="M150 160c-62 6-84 40-84 84 0 52 34 82 84 82s84-30 84-82c0-44-22-78-84-84z" fill="none" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M118 166Q150 176 182 166" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round"/>
+      <path d="M100 340h100l8 18h-116z" fill="#cfcfcf" stroke="${ink}" stroke-width="4.5" stroke-linejoin="round"/>
     </g></g>
   </svg>`;
   }
@@ -346,11 +588,11 @@ let openRail = null, detailBusy = false, clone = null;
 function makeRail(size, label, price, hintUp, hintDown) {
   const row = document.createElement('section'); row.className = 'row'; row.setAttribute('aria-label', label);
   row.innerHTML = `<div class="bg"></div><div class="bgw"></div><div class="vig"></div>
-    <div class="head" aria-live="polite"><p>${label} \u00b7 ${KES(price)}</p><h1></h1><div class="spec"></div></div>
+    <div class="head" aria-live="polite"><p>${label}${price ? ' \u00b7 ' + KES(price) : ''}</p><h1></h1><div class="spec"></div></div>
     <div class="rail" role="list"></div>
     <button class="ar l" type="button" aria-label="Previous flavor"><svg viewBox="0 0 9 15"><path d="M8 1 1.5 7.5 8 14"/></svg></button>
     <button class="ar r" type="button" aria-label="Next flavor"><svg viewBox="0 0 9 15"><path d="M1 1l6.5 6.5L1 14"/></svg></button>
-    <div class="scrollhint">${hintUp || hintDown}<i>${hintUp ? '&#8593;' : '&#8595;'}</i></div>`;
+    <div class="scrollhint">${hintDown || hintUp}<i>${hintDown ? '&#8595;' : '&#8593;'}</i></div>`;
   $('rl-rows').appendChild(row);
   const R = { size, row, p: 0, target: 0, active: 0, raf: 0, bgAnim: null, bgColor: null, dragging: false };
   const rail = row.querySelector('.rail'), bg = row.querySelector('.bg'), bgw = row.querySelector('.bgw');
@@ -375,7 +617,7 @@ function makeRail(size, label, price, hintUp, hintDown) {
   R.setActive = (dir) => {
     const it = R.items[R.active];
     row.querySelector('h1').textContent = it.f.name;
-    row.querySelector('.spec').textContent = `${KES(it.s.price_kes)} \u00b7 ${size === 'packet' ? 'Packet' : 'Sample'}`;
+    row.querySelector('.spec').textContent = `${KES(it.s.price_kes)} \u00b7 ${sizeName(size)}`;
     R.switchBg(bgOf(it.f), dir);
   };
   // The background switches colour when the user swipes: a wipe in the direction of travel.
@@ -412,11 +654,13 @@ function makeRail(size, label, price, hintUp, hintDown) {
   row.querySelector('.ar.l').onclick = () => R.step(-1); row.querySelector('.ar.r').onclick = () => R.step(1);
   rails.push(R); return R;
 }
+const SIZE_ROWS = [['sample', 'Samples', 'Sample'], ['packet', 'Packets', 'Packet'], ['night', 'Hookah rental', 'Per night'], ['gear', 'Gear', 'Gear']];
+const sizeName = (k) => (SIZE_ROWS.find((r) => r[0] === k) || [0, 0, k])[2];
 function buildRows() {
   const prices = {};
   flavors.forEach((f) => f.sizes.forEach((s) => { if (!prices[s.size]) prices[s.size] = s.price_kes; }));
-  const have = ['sample', 'packet'].filter((k) => prices[k]);
-  have.forEach((k, i) => makeRail(k, k === 'packet' ? 'Packets' : 'Samples', prices[k], i > 0 ? 'Samples above' : '', i === 0 && have.length > 1 ? 'Packets below' : ''));
+  const have = SIZE_ROWS.filter((r) => prices[r[0]]);
+  have.forEach((r, i) => makeRail(r[0], r[1], r[0] === 'gear' || r[0] === 'night' ? 0 : prices[r[0]], i > 0 ? have[i - 1][1] + ' above' : '', i < have.length - 1 ? have[i + 1][1] + ' below' : ''));
 }
 const curRail = () => rails[Math.round($('rl-rows').scrollTop / $('rl-rows').clientHeight)] || rails[0];
 
@@ -424,7 +668,7 @@ const curRail = () => rails[Math.round($('rl-rows').scrollTop / $('rl-rows').cli
 const tgtFor = (w, h) => { const vw = innerWidth, vh = innerHeight, th = Math.min(vh * .5, vw >= 900 ? vh * .62 : vh * .5); const S = th / h; return { dx: vw / 2 - (vw >= 900 ? vw * .3 : vw / 2), dy: vh * .34, S }; };
 function place(R) { const it = R.items[R.active]; return it; }
 function fillDetail(R) { const it = R.items[R.active]; $('rl-dn').textContent = it.f.name; $('rl-ds').textContent = `${size2(R)} \u00b7 ${KES(it.s.price_kes)}`; $('rl-oa').textContent = 'Order ' + it.f.name; $('rl-dsub').textContent = `${size2(R)[0] + size2(R).slice(1).toLowerCase()} ${KES(it.s.price_kes)} \u00b7 Delivered to Kabarak`; $('rl-db').textContent = it.f.blurb; }
-const size2 = (R) => (R.size === 'packet' ? 'PACKET' : 'SAMPLE');
+const size2 = (R) => sizeName(R.size).toUpperCase();
 async function openDetail(R) {
   if (detailBusy || openRail) return; detailBusy = true; openRail = R;
   const it = R.items[R.active], act = R.sleeves[R.active], r = act.getBoundingClientRect(), vw = innerWidth, vh = innerHeight;
@@ -499,10 +743,17 @@ function updateTotal() {
   const fee = deliveryFee();
   $('total').textContent = picked && q >= 1 ? 'Total: ' + KES(picked.size.price_kes * q + fee) + ` (items ${KES(picked.size.price_kes * q)} + delivery ${KES(fee)}${quote && quote.km != null ? ', ' + quote.km + ' km' : ''})` : '';
 }
+function showWhatsApp() {
+  const a = $('wa'), n = config && config.whatsapp;
+  if (!n) { a.style.display = 'none'; return; }
+  a.href = 'https://wa.me/' + n + '?text=' + encodeURIComponent('Hi, I would like to see the menu'); a.style.display = 'flex';
+}
 function openOrder(flavor, size) {
   picked = { flavor, size }; quote = null;
   clearInterval(timer); orderId = null;
-  $('dsub').textContent = `${flavor.name}, ${size.size === 'packet' ? 'packet' : 'sample'} (${KES(size.price_kes)} each)`;
+  const night = size.size === 'night';
+  $('ql').textContent = night ? 'Nights' : 'Quantity';
+  $('dsub').textContent = night ? `${flavor.name}, per night (${KES(size.price_kes)} per night)` : `${flavor.name}${size.size === 'gear' ? '' : ', ' + sizeName(size.size).toLowerCase()} (${KES(size.price_kes)} each)`;
   $('msg').textContent = ''; $('msg').className = ''; $('demo').style.display = 'none'; $('go').disabled = false;
   $('q').value = 1; phoneHint();
   showForm(); setupProviders();
@@ -682,7 +933,7 @@ function showClosed() { const b = $('closed'), c = config.shop && !config.shop.o
   try {
     const [h, f, c] = await Promise.all([api('/api/health'), api('/api/flavors'), api('/api/config')]);
     if (!h.ok || !h.data.ok || !f.ok || !f.data.length) throw new Error('unavailable');
-    flavors = f.data; config = c.data;
+    flavors = f.data; config = c.data; showWhatsApp();
     showClosed();
     buildRows();
     setInterval(async () => { const r = await api('/api/config'); if (r.ok) { config = r.data; showClosed(); } }, 5 * 60 * 1000);
