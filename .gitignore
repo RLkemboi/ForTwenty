@@ -4,3 +4,7 @@ node_modules
 dev.log
 *.png
 !public/vendor/**/*.png
+
+# graphify: keep outputs, drop machine-specific scratch
+graphify-out/.graphify_python
+graphify-out/.graphify_root

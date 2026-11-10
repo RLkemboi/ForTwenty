@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_migrations_0003_airtel_map_sql", "label": "0003_airtel_map.sql", "file_type": "code", "source_file": "migrations/0003_airtel_map.sql", "source_location": null}, {"id": "orders", "label": "orders", "file_type": "code", "source_file": "", "source_location": "", "origin_file": "$graphify-root$/migrations/0003_airtel_map.sql"}], "edges": []}
