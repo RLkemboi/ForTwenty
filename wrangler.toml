@@ -19,13 +19,16 @@ namespace_id = "7041"
   limit = 120
   period = 60
 
+[observability]
+enabled = true
+
 [triggers]
 crons = ["*/5 * * * *"]
 
 # Non-secret settings. Secrets (ADMIN_TOKEN, CALLBACK_SECRET, DARAJA_* keys, AT_API_KEY)
 # go in .dev.vars locally and in `wrangler secret put` for production.
 [vars]
-PAYMENTS_MODE = "mock"        # "mock" until the real Till and Daraja approval exist, then "daraja"
+PAYMENTS_MODE = "daraja"      # "mock" until the real Till and Daraja approval exist, then "daraja"
 SMS_MODE = "mock" # demo: texts are only recorded in the SMS log. Switch to "at" for live (see SMS_ALLOWLIST)
 DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account

@@ -46,7 +46,8 @@ async function mpesaPush(env, { orderId, phone, amount }) {
       BusinessShortCode: env.DARAJA_SHORTCODE,
       Password: btoa(env.DARAJA_SHORTCODE + env.DARAJA_PASSKEY + ts),
       Timestamp: ts,
-      TransactionType: 'CustomerBuyGoodsOnline',
+      // The Daraja sandbox shortcode (174379) is a paybill, so the sandbox needs the paybill type; a real Till uses Buy Goods.
+      TransactionType: env.DARAJA_ENV === 'production' ? 'CustomerBuyGoodsOnline' : 'CustomerPayBillOnline',
       Amount: Math.round(amount),
       PartyA: phone,
       PartyB: env.DARAJA_TILL,
