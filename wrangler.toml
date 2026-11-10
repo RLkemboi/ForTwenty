@@ -19,6 +19,9 @@ namespace_id = "7041"
   limit = 120
   period = 60
 
+[observability]
+enabled = true
+
 [triggers]
 crons = ["*/5 * * * *"]
 

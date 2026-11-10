@@ -322,6 +322,7 @@ async function createOrder(env, req) {
     const { checkoutRequestId } = await stkPush(env, { orderId: id, phone, amount: total, provider });
     await env.DB.prepare('UPDATE orders SET checkout_request_id = ? WHERE id = ?').bind(checkoutRequestId, id).run();
   } catch (e) {
+    console.error('stkPush failed', provider, String(e && e.message).slice(0, 300)); // reason for the owner; never shown to the customer, never contains a secret
     await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ?").bind(id).run();
     return json({ error: 'Could not start the payment prompt. Nothing was charged. Please try again.' }, 502);
   }
