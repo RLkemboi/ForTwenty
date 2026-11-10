@@ -52,7 +52,7 @@ OPEN_HOUR = "8"               # orders start at 8:00 am Nairobi time
 CLOSE_HOUR = "24"             # orders stop at midnight (24)
 # WhatsApp: "mock" only records messages in wa_log. "cloud" sends through Meta's WhatsApp Business Cloud API (needs the secrets WA_TOKEN, WA_VERIFY_TOKEN, WA_APP_SECRET).
 WHATSAPP_MODE = "mock"
-WHATSAPP_NUMBER = ""          # the shop's WhatsApp number with country code, digits only, e.g. 2547XXXXXXXX. Empty hides the WhatsApp icon
+WHATSAPP_NUMBER = "254794297971" # the shop's WhatsApp number with country code, digits only, e.g. 2547XXXXXXXX. Empty hides the WhatsApp icon
 WA_PHONE_NUMBER_ID = ""       # from Meta: WhatsApp > API setup > Phone number ID
 WA_TEMPLATE = "order_update"  # approved utility template with ONE body variable {{1}}, used outside the 24-hour reply window
 WA_TEMPLATE_LANG = "en"

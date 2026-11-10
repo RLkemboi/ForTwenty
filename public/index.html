@@ -135,9 +135,14 @@
   .box b { font: 700 14px/1.4 var(--wide); }
   .demo { background: #14110a; border: 1px dashed #8a6d1d; color: #e8d9a8; }
   .demo button { width: 100%; margin-top: 8px; font: 700 12px var(--wide); padding: 13px; cursor: pointer; border-radius: 999px; border: 1px solid #8a6d1d; background: transparent; color: #f2e4b4; }
-  .wa { position: fixed; right: 14px; bottom: 14px; z-index: 12; width: 52px; height: 52px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: rgba(5,5,5,.72); border: 1px solid var(--line); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-  .wa svg { width: 26px; height: 26px; fill: #fff; }
-  .wa:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  /* Floating WhatsApp bubble (bottom right). Hidden until WHATSAPP_NUMBER is set. WhatsApp green on purpose: it must read as WhatsApp at a glance. */
+  .wa { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 12; width: 60px; height: 60px; border-radius: 50%; display: none; align-items: center; justify-content: center; background: #25d366; border: 2px solid rgba(255,255,255,.9); box-shadow: 0 6px 18px rgba(0,0,0,.5); transition: transform .15s ease; }
+  .wa:active { transform: scale(.94); }
+  .wa::before { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #25d366; opacity: 0; animation: wapulse 2.6s ease-out 1.2s infinite; pointer-events: none; }
+  @keyframes wapulse { 0% { transform: scale(1); opacity: .65; } 70%, 100% { transform: scale(1.55); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .wa::before { animation: none; } }
+  .wa svg { width: 32px; height: 32px; fill: #fff; }
+  .wa:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   .closedbar { position: fixed; top: 56px; left: 0; right: 0; z-index: 9; background: #3a0f16; color: #ffb3bd; padding: 11px 22px; font: 500 13px/1.4 var(--body); border-bottom: 1px solid #6b1c28; }
   #down { display: none; text-align: center; padding: 18vh 24px; color: #ddd; line-height: 1.6; }
   #down h2 { font: 400 52px/1 var(--script); color: #fff; margin: 0 0 12px; }
@@ -787,7 +792,7 @@ function updateTotal() {
 function showWhatsApp() {
   const a = $('wa'), n = config && config.whatsapp;
   if (!n) { a.style.display = 'none'; return; }
-  a.href = 'https://wa.me/' + n + '?text=' + encodeURIComponent('Hi, I would like to see the menu'); a.style.display = 'flex';
+  a.href = 'https://wa.me/' + n + '?text=' + encodeURIComponent('Hi, I would like to see the menu'); a.title = 'Chat with us on WhatsApp'; a.style.display = 'flex';
 }
 function openOrder(flavor, size) {
   picked = { flavor, size }; quote = null;
