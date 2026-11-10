@@ -27,7 +27,7 @@ crons = ["*/5 * * * *"]
 [vars]
 PAYMENTS_MODE = "daraja"      # "mock" until the real Till and Daraja approval exist, then "daraja"
 SMS_MODE = "mock" # demo: texts are only recorded in the SMS log. Switch to "at" for live (see SMS_ALLOWLIST)
-DARAJA_ENV = "production"
+DARAJA_ENV = "sandbox"
 AIRTEL_ENV = "sandbox"        # "production" once Airtel approves the live collection account
 RIDER_MODE = "offers"         # live: paid orders are OFFERED to on-duty riders (accept/decline, 2-minute window). "demo" = auto-pass to rider 1; "real" = instant assignment, no accept
 ENABLED_PROVIDERS = "mpesa"  # Airtel hidden until the client has an Airtel merchant account: use "mpesa,airtel" to show it
