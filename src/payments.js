@@ -27,6 +27,11 @@ async function darajaToken(env) {
 export async function checkPayments(env) {
   const missing = DARAJA_REQUIRED.filter((k) => !String(env[k] || '').trim());
   const out = { mode: env.PAYMENTS_MODE, daraja_env: env.DARAJA_ENV || 'sandbox', missing, oauth: null, callback_url: env.PUBLIC_URL ? env.PUBLIC_URL + '/api/pay/cb/<CALLBACK_SECRET>' : null, ready: false };
+  // Why Daraja might call the callback URL "invalid", without ever showing the secret.
+  if (env.PUBLIC_URL && env.CALLBACK_SECRET) {
+    const cb = env.PUBLIC_URL + '/api/pay/cb/' + env.CALLBACK_SECRET;
+    out.callback_diag = { code_version: 'pay-cb-1', https: /^https:\/\//.test(cb), length: cb.length, secret_length: String(env.CALLBACK_SECRET).length, secret_letters_digits_only: /^[A-Za-z0-9]+$/.test(String(env.CALLBACK_SECRET)), has_banned_word: /mpesa|m-pesa|safaricom|daraja|sandbox/i.test(cb) };
+  }
   if (!missing.includes('DARAJA_KEY') && !missing.includes('DARAJA_SECRET')) {
     try { darajaCache = { token: null, exp: 0 }; await darajaToken(env); out.oauth = 'ok'; } catch (e) { out.oauth = 'failed: ' + String(e.message).slice(0, 80); }
   }
