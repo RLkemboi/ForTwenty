@@ -84,6 +84,8 @@
   .x { border: 0; background: transparent; color: #fff; font-size: 30px; line-height: 1; cursor: pointer; padding: 0 4px; }
   label { display: block; margin: 20px 0 8px; font: 500 10px/1.3 var(--wide); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
   label small { font: 400 11px var(--body); letter-spacing: 0; text-transform: none; color: #8d8d8d; }
+  select { width: 100%; padding: 14px 14px; font: 400 16px var(--body); color: #fff; background: #141414; border: 1px solid var(--line); border-radius: 12px; }
+  .two { display: flex; gap: 10px; } .two > div { flex: 1; min-width: 0; }
   input[type=text], input[type=tel], input[type=number] { width: 100%; padding: 14px 14px; font: 400 16px var(--body); color: #fff; background: #141414; border: 1px solid var(--line); border-radius: 12px; }
   input::placeholder { color: #6e6e6e; }
   input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
@@ -205,6 +207,24 @@
         <input id="ph" type="tel" inputmode="numeric" placeholder="712 345 678" autocomplete="tel-national" aria-label="Phone number after the country code">
       </div>
       <p class="hint" id="phhint" aria-live="polite">Type it with or without the first 0, both work.</p>
+      <fieldset class="provs" id="loctype">
+        <legend>Where should we deliver?</legend>
+        <div class="opts">
+          <label class="opt" id="o-inside"><input type="radio" name="lt" value="inside">Inside (apartment)</label>
+          <label class="opt" id="o-outside"><input type="radio" name="lt" value="outside" checked>Outside (map pin)</label>
+        </div>
+      </fieldset>
+      <div id="inbox" style="display:none">
+        <label for="apt">Select your apartment</label>
+        <select id="apt"><option value="">Choose your apartment</option></select>
+        <div class="two">
+          <div><label for="flr">Floor</label><input id="flr" type="text" maxlength="10" placeholder="e.g. 3 or G" autocomplete="off"></div>
+          <div><label for="hse">House number</label><input id="hse" type="text" maxlength="10" placeholder="e.g. 12 or B4" autocomplete="off"></div>
+        </div>
+        <label for="nt">Extra info <small>(optional)</small></label>
+        <input id="nt" type="text" maxlength="120" placeholder="Anything that helps the rider (gate, call on arrival)" autocomplete="off">
+      </div>
+      <div id="outbox">
       <label for="ad">Landmark <small>(optional once you pin below)</small></label>
       <input id="ad" type="text" placeholder="Building, street, landmark (helps the rider)" autocomplete="street-address">
       <label id="maplabel" for="loc">Pin your spot on the map</label>
@@ -212,6 +232,7 @@
       <div id="map" role="application" aria-label="Map. Tap to drop a pin where the rider should come."></div>
       <p class="hint" id="pinhint" aria-live="polite">Or tap the map to drop a pin. You can drag the pin to fine tune it.</p>
       <p class="hint err" id="mapfail">The map could not load. Type your delivery spot above and we will still deliver.</p>
+      </div>
       <div class="row2"><input id="age" type="checkbox"><label for="age">I confirm I am 18 years or older.</label></div>
       <p id="total"></p>
       <button class="pay" id="go" type="submit">Pay with M-Pesa</button>
@@ -728,7 +749,27 @@ document.addEventListener('click', (e) => { if (!e.target.closest('#tips')) { $(
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('tips').classList.remove('open'); });
 
 /* ---------- Order popup ---------- */
-function deliveryFee() { return quote && quote.fee_kes != null ? quote.fee_kes : ((config.pricing && config.pricing.fallback_kes) || 0); }
+const locType = () => (document.querySelector('input[name=lt]:checked') || { value: 'outside' }).value;
+// Inside orders have no map pin, so they pay the flat fee; outside orders use the quote for the pin.
+function deliveryFee() { if (locType() === 'inside') return (config.pricing && config.pricing.fallback_kes) || 0; return quote && quote.fee_kes != null ? quote.fee_kes : ((config.pricing && config.pricing.fallback_kes) || 0); }
+function applyLoc() {
+  const inside = locType() === 'inside';
+  $('inbox').style.display = inside ? '' : 'none';
+  $('outbox').style.display = inside ? 'none' : '';
+  if (!inside) showMap();
+  updateTotal();
+}
+function setupLocation() {
+  const list = (config && config.apartments) || [];
+  const sel = $('apt');
+  if (sel.options.length <= 1) list.forEach((a) => { const o = document.createElement('option'); o.value = a; o.textContent = a; sel.appendChild(o); });
+  $('o-inside').style.display = list.length ? '' : 'none';
+  $('loctype').style.display = list.length ? '' : 'none';
+  document.querySelector('input[name=lt][value=outside]').checked = true;
+  applyLoc();
+}
+document.querySelectorAll('input[name=lt]').forEach((r) => r.addEventListener('change', applyLoc));
+['apt', 'flr', 'hse'].forEach((id) => $(id).addEventListener('input', () => { if (/^Please (pick|enter)/.test($('msg').textContent)) { $('msg').textContent = ''; $('msg').className = ''; } }));
 async function refreshQuote() {
   const my = ++quoteSeq;
   if (!pin) { quote = null; updateTotal(); return; }
@@ -760,7 +801,7 @@ function openOrder(flavor, size) {
   updateTotal();
   if (config.shop && !config.shop.open) { $('msg').className = 'err'; $('msg').textContent = config.shop.message; $('go').disabled = true; }
   $('dlg').showModal();
-  showMap();
+  setupLocation();
   if (pin) refreshQuote();
 }
 $('close').onclick = () => $('dlg').close();
@@ -893,11 +934,15 @@ async function poll() {
 
 $('f').onsubmit = async (e) => {
   e.preventDefault();
-  if (mapReady() && !pin) { $('msg').className = 'err'; $('msg').textContent = 'Please pin your spot on the map, or tap "Use my current location".'; return; }
+  const inside = locType() === 'inside';
+  if (inside) {
+    const bad = !$('apt').value ? ['Please pick your apartment from the list.', 'apt'] : !$('flr').value.trim() ? ['Please enter your floor.', 'flr'] : !$('hse').value.trim() ? ['Please enter your house number.', 'hse'] : null;
+    if (bad) { $('msg').className = 'err'; $('msg').textContent = bad[0]; $(bad[1]).focus(); return; }
+  } else if (mapReady() && !pin) { $('msg').className = 'err'; $('msg').textContent = 'Please pin your spot on the map, or tap "Use my current location".'; return; }
   const num = resolvePhone($('cc').value, $('ph').value);
   if (!num) { $('msg').className = 'err'; $('msg').textContent = 'Check the phone number: it must be a Kenyan number, like 0712 345 678.'; $('ph').focus(); return; }
   // Last check before a payment prompt is sent to a phone: show the number and ask.
-  if (quote && quote.ok === false) { $('msg').className = 'err'; $('msg').textContent = `That spot is about ${quote.straight_km} km away. We deliver within ${quote.max_km} km of Kabarak.`; return; }
+  if (!inside && quote && quote.ok === false) { $('msg').className = 'err'; $('msg').textContent = `That spot is about ${quote.straight_km} km away. We deliver within ${quote.max_km} km of Kabarak.`; return; }
   const q = Number($('q').value), total = picked.size.price_kes * q + deliveryFee();
   $('msg').textContent = '';
   $('cfmt').textContent = `Send the ${PROV[provider()].name} prompt for KSh ${total} to +${num.slice(0, 3)} ${num.slice(3, 6)} ${num.slice(6, 9)} ${num.slice(9)}? Please make sure this is your own number.`;
@@ -910,7 +955,10 @@ $('cfmy').onclick = async () => {
   $('f').style.display = 'none'; $('prog').style.display = 'block'; renderProg('sending');
   const r = await api('/api/orders', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ product_id: picked.size.product_id, qty: Number($('q').value), phone: $('cc').value + $('ph').value, address: $('ad').value, age_confirmed: $('age').checked, provider: provider(), lat: pin ? pin.lat : undefined, lng: pin ? pin.lng : undefined }),
+    body: JSON.stringify({ product_id: picked.size.product_id, qty: Number($('q').value), phone: $('cc').value + $('ph').value, age_confirmed: $('age').checked, provider: provider(),
+      ...(locType() === 'inside'
+        ? { location_type: 'inside', apartment: $('apt').value, floor: $('flr').value, house: $('hse').value, notes: $('nt').value }
+        : { location_type: 'outside', address: $('ad').value, lat: pin ? pin.lat : undefined, lng: pin ? pin.lng : undefined }) }),
   });
   if (!r.ok) { showForm(); $('go').disabled = false; $('msg').className = 'err'; $('msg').textContent = r.data.error || 'Something went wrong. Please try again.'; return; }
   orderId = r.data.order_id;

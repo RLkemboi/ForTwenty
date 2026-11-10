@@ -187,6 +187,20 @@ const op = await (await post('/api/admin/shop', { closed: false }, ADMIN)).json(
 check('admin reopens the shop', op.ok && op.open === true);
 check('orders work again', (await order({ phone: '0733000002', address: 'Reopened shop test street' })).status === 200);
 
+// Inside orders: apartment from the list + floor + house number, extra info optional, no map pin
+const locCfg = await get('/api/config');
+const apt = (locCfg.apartments || [])[0];
+check('config lists the apartments', Array.isArray(locCfg.apartments) && locCfg.apartments.length > 0);
+const inside = (over = {}) => order({ phone: '0733000003', address: undefined, location_type: 'inside', apartment: apt, floor: '3', house: '12', ...over });
+const ins = await (await inside()).json();
+const insRow = (await orders()).find((o) => o.id === ins.order_id);
+check('inside order builds the address', insRow && insRow.address === `${apt}, floor 3, house 12` && insRow.lat == null, JSON.stringify(insRow));
+const insNote = await (await inside({ phone: '0733000004', notes: 'Blue gate' })).json();
+check('inside extra info is optional and appended', (await orders()).find((o) => o.id === insNote.order_id)?.address.endsWith('(Blue gate)'));
+check('inside rejects an unknown apartment', (await inside({ phone: '0733000005', apartment: 'Made up Towers' })).status === 400);
+check('inside needs a floor', (await inside({ phone: '0733000006', floor: '' })).status === 400);
+check('inside needs a house number', (await inside({ phone: '0733000007', house: '' })).status === 400);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
 

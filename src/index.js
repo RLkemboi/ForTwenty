@@ -3,6 +3,7 @@ import { sendSms, retryFailed } from './sms.js';
 import { riderPage } from './riderPage.js';
 import { normalizePhone, phoneList } from './phone.js';
 import { verifySignature, processWebhook, notifyCustomer } from './whatsapp.js';
+import { APARTMENTS, insideAddress } from './apartments.js';
 
 // Every response from the worker carries these. (Static pages get theirs from public/_headers.)
 const SEC = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
@@ -282,16 +283,24 @@ async function createOrder(env, req) {
   if (isBlocked) return json({ error: 'We are not able to take orders from this number.' }, 403);
   const provider = String(b.provider || 'mpesa');
   if (!providersOn(env).includes(provider)) return json({ error: 'That payment method is not available right now.' }, 400);
-  let lat = null, lng = null;
-  if (b.lat != null || b.lng != null) {
-    lat = Number(b.lat); lng = Number(b.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'The map pin is not valid. Please pin again.' }, 400);
-    if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our delivery area.' }, 400);
+  let lat = null, lng = null, address;
+  if (b.location_type === 'inside') {
+    // Inside: the customer picked an apartment from our list and gave a floor and house number. No map pin.
+    const ins = insideAddress(b);
+    if (ins.error) return json({ error: ins.error }, 400);
+    address = ins.address;
+  } else {
+    // Outside (the default): a map pin, with an optional landmark.
+    if (b.lat != null || b.lng != null) {
+      lat = Number(b.lat); lng = Number(b.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return json({ error: 'The map pin is not valid. Please pin again.' }, 400);
+      if (lat < AREA.latMin || lat > AREA.latMax || lng < AREA.lngMin || lng > AREA.lngMax) return json({ error: 'The map pin is outside our delivery area.' }, 400);
+    }
+    // With a map pin the landmark is optional; without one we need a written delivery spot.
+    address = String(b.address || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (!address && lat !== null) address = 'Map pin only (no landmark)';
+    if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters), or pin your location on the map.' }, 400);
   }
-  // With a map pin the landmark is optional; without one we need a written delivery spot.
-  let address = String(b.address || '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  if (!address && lat !== null) address = 'Map pin only (no landmark)';
-  if (address.length < 5 || address.length > 200) return json({ error: 'Enter a delivery spot (5 to 200 characters), or pin your location on the map.' }, 400);
   const qty = Number(b.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > 10) return json({ error: 'Quantity must be 1 to 10.' }, 400);
   const product = await env.DB.prepare('SELECT id, price_kes FROM products WHERE id = ? AND active = 1 AND (flavor_id IS NULL OR flavor_id IN (SELECT id FROM flavors WHERE active = 1))').bind(Number(b.product_id)).first();
@@ -438,7 +447,7 @@ export default {
         }
       }
 
-      if (path === '/api/config') return json({ shop: await shopStatus(env), center: { lat: num(env.SHOP_LAT, -0.1671), lng: num(env.SHOP_LNG, 35.966) }, payments_mode: env.PAYMENTS_MODE, whatsapp: String(env.WHATSAPP_NUMBER || '').replace(/\D/g, '') || null, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA });
+      if (path === '/api/config') return json({ shop: await shopStatus(env), center: { lat: num(env.SHOP_LAT, -0.1671), lng: num(env.SHOP_LNG, 35.966) }, payments_mode: env.PAYMENTS_MODE, whatsapp: String(env.WHATSAPP_NUMBER || '').replace(/\D/g, '') || null, pricing: { fallback_kes: Math.max(0, num(env.DELIVERY_FALLBACK_KES, 150)), max_km: num(env.DELIVERY_MAX_KM, 12) }, providers: providersOn(env), area: AREA, apartments: APARTMENTS });
       if (path === '/api/quote' && method === 'GET') {
         const la = url.searchParams.get('lat'), ln = url.searchParams.get('lng');
         if (la === null || ln === null) return json(deliveryQuote(env, null, null));
