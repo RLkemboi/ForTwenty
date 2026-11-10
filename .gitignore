@@ -4,3 +4,10 @@ node_modules
 dev.log
 *.png
 !public/vendor/**/*.png
+
+# graphify: keep the graph, ignore its working files
+graphify-out/cache/
+graphify-out/obsidian/
+graphify-out/.graphify_*
+graphify-out/*.sig
+graphify-out/cost.json
