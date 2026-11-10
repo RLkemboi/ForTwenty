@@ -40,12 +40,13 @@ ALERT_PHONES = "254702581356" # down and no-rider alerts; client's number is add
 RIDER_CUT_PCT = "10"          # only used for old orders with no delivery fee. The rider is paid the delivery fee
 SHOP_LAT = "-0.1671"          # Kabarak University (the centre of the delivery area)
 SHOP_LNG = "35.9660"
-DELIVERY_BASE_KES = "50"      # delivery fee = base + per-km x road distance, rounded up to the next 10, at least the minimum.
-DELIVERY_PER_KM_KES = "25"    # ESTIMATE, to be checked against what a Nakuru rider would quote
-DELIVERY_MIN_KES = "100"
+# TESTING: delivery is free for now. To turn delivery fees back on, restore base 50, per-km 25, min 100 and fallback 150.
+DELIVERY_BASE_KES = "0"       # (live: "50") delivery fee = base + per-km x road distance, rounded up to the next 10, at least the minimum.
+DELIVERY_PER_KM_KES = "0"     # (live: "25") ESTIMATE, to be checked against what a Nakuru rider would quote
+DELIVERY_MIN_KES = "0"        # (live: "100")
 DELIVERY_ROUND_KES = "10"
 ROAD_FACTOR = "1.3"           # road distance is about 1.3x the straight line
-DELIVERY_FALLBACK_KES = "150" # flat fee when the customer gives no map pin
+DELIVERY_FALLBACK_KES = "0"   # (live: "150") flat fee when the customer gives no map pin
 DELIVERY_MAX_KM = "3"         # farther than this, in a straight line from Kabarak, is refused
 OPEN_HOUR = "8"               # orders start at 8:00 am Nairobi time
 CLOSE_HOUR = "24"             # orders stop at midnight (24)
