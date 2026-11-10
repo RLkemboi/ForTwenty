@@ -26,7 +26,7 @@ async function darajaToken(env) {
 // Go-live check for the owner: lists missing settings and proves the Daraja key and secret work. Never returns a secret.
 export async function checkPayments(env) {
   const missing = DARAJA_REQUIRED.filter((k) => !String(env[k] || '').trim());
-  const out = { mode: env.PAYMENTS_MODE, daraja_env: env.DARAJA_ENV || 'sandbox', missing, oauth: null, callback_url: env.PUBLIC_URL ? env.PUBLIC_URL + '/api/mpesa/callback/<CALLBACK_SECRET>' : null, ready: false };
+  const out = { mode: env.PAYMENTS_MODE, daraja_env: env.DARAJA_ENV || 'sandbox', missing, oauth: null, callback_url: env.PUBLIC_URL ? env.PUBLIC_URL + '/api/pay/cb/<CALLBACK_SECRET>' : null, ready: false };
   if (!missing.includes('DARAJA_KEY') && !missing.includes('DARAJA_SECRET')) {
     try { darajaCache = { token: null, exp: 0 }; await darajaToken(env); out.oauth = 'ok'; } catch (e) { out.oauth = 'failed: ' + String(e.message).slice(0, 80); }
   }
@@ -52,7 +52,7 @@ async function mpesaPush(env, { orderId, phone, amount }) {
       PartyA: phone,
       PartyB: env.DARAJA_TILL,
       PhoneNumber: phone,
-      CallBackURL: env.PUBLIC_URL + '/api/mpesa/callback/' + env.CALLBACK_SECRET,
+      CallBackURL: env.PUBLIC_URL + '/api/pay/cb/' + env.CALLBACK_SECRET, // no "mpesa"/"safaricom" in the URL: Daraja answers "Invalid CallBackURL" otherwise
       AccountReference: orderId.slice(0, 12),
       TransactionDesc: 'Order',
     }),

@@ -397,7 +397,7 @@ export default {
     const method = req.method;
     try {
       // Public API only: Safaricom and Airtel callbacks, the health ping and the monitor are never limited, so they cannot be shut out.
-      if (env.RL_API && env.RATE_LIMIT_OFF !== '1' && path.startsWith('/api/') && !/^\/api\/(health|monitor\/|mpesa\/callback|airtel\/callback|whatsapp\/webhook)/.test(path)) {
+      if (env.RL_API && env.RATE_LIMIT_OFF !== '1' && path.startsWith('/api/') && !/^\/api\/(health|monitor\/|mpesa\/callback|pay\/cb\/|airtel\/callback|whatsapp\/webhook)/.test(path)) {
         const { success } = await env.RL_API.limit({ key: clientIp(req) });
         if (!success) return new Response(JSON.stringify({ error: 'Too many requests. Please slow down.' }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '30', ...SEC } });
       }
@@ -463,7 +463,8 @@ export default {
         return o ? json(o) : json({ error: 'Not found' }, 404);
       }
 
-      m = path.match(/^\/api\/mpesa\/callback\/(.+)$/);
+      // Safaricom rejects callback URLs that contain the word "mpesa", so the URL we register is /api/pay/cb/<secret>. The old path stays working.
+      m = path.match(/^\/api\/(?:mpesa\/callback|pay\/cb)\/(.+)$/);
       if (m && method === 'POST') {
         if (!env.CALLBACK_SECRET || !safeEq(m[1], env.CALLBACK_SECRET)) return json({ error: 'Forbidden' }, 403);
         await processCallback(env, await req.json().catch(() => null));

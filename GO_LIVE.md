@@ -7,7 +7,7 @@ Apply database changes first: `npx wrangler d1 execute DB --remote --file=migrat
 1. Get a Till and a Daraja production app approved by Safaricom (Go Live on developer.safaricom.co.ke). You receive: consumer key, consumer secret, store number (shortcode), till number, passkey.
 2. Secrets: `npx wrangler secret put DARAJA_KEY`, `DARAJA_SECRET`, `DARAJA_PASSKEY`, `DARAJA_SHORTCODE`, `DARAJA_TILL`, `CALLBACK_SECRET` (a long random string; it is the last part of the callback URL).
 3. In `wrangler.toml` set `PAYMENTS_MODE = "daraja"` and `DARAJA_ENV = "production"` (use `sandbox` first with Safaricom's test shortcode).
-4. Register the callback with Safaricom: `https://<PUBLIC_URL>/api/mpesa/callback/<CALLBACK_SECRET>`.
+4. Register the callback with Safaricom: `https://<PUBLIC_URL>/api/pay/cb/<CALLBACK_SECRET>` (the URL must not contain "mpesa" or "safaricom").
 5. Deploy, then call `GET /api/admin/payments/check` with the admin token. It must show `missing: []`, `oauth: "ok"`, `ready: true`.
 6. Place one real KSh 10-100 order to yourself and confirm: callback marks it paid, rider offer goes out, receipt number shows in /admin.
 The 5-minute job also asks Safaricom about unpaid orders whose callback never arrived. That query does not return the M-Pesa receipt, so such orders show no receipt; check the M-Pesa statement.
