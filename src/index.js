@@ -324,7 +324,9 @@ async function createOrder(env, req) {
   } catch (e) {
     console.error('stkPush failed', provider, String(e && e.message).slice(0, 300)); // reason for the owner; never shown to the customer, never contains a secret
     await env.DB.prepare("UPDATE orders SET status = 'payment_failed' WHERE id = ?").bind(id).run();
-    return json({ error: 'Could not start the payment prompt. Nothing was charged. Please try again.' }, 502);
+    // Sandbox testing only: show the reason in the response so it can be read in the browser. Never in production.
+    const detail = env.DARAJA_ENV !== 'production' && env.PAYMENTS_MODE === 'daraja' ? String(e && e.message).slice(0, 300) : undefined;
+    return json({ error: 'Could not start the payment prompt. Nothing was charged. Please try again.', detail }, 502);
   }
   return json({ order_id: id, total_kes: total });
 }
