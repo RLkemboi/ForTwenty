@@ -33,13 +33,14 @@ Longer written version (older, same content): https://claude.ai/artifact/57TSt8W
 - [ ] Production payments after Safaricom approves: secrets in Cloudflare, `DARAJA_ENV = "production"`, `/api/admin/payments/check`, one real KSh 10 to 100 test
 - [ ] Put back prices and delivery fees before real customers
 - [ ] Find why 13 checks fail in `test.mjs` (2 were the rate limiter; run with `RATE_LIMIT_OFF=1`, `ENABLED_PROVIDERS=mpesa,airtel`, a monitor token)
+- [ ] **Fix 4 message bugs found while drafting** (checked, all real): (1) the bot ignores "HOURS" and "payment" because 4-letter keywords only match exactly (`src/whatsapp.js:62`), yet the bot tells customers to send HOURS; (2) the DELIVERY reply prints "from KSh 0" and will print a fee amount (`src/whatsapp.js:92`); (3) the bot greeting says "Kabarak Delivery" (`src/whatsapp.js:100`); (4) the cancelled-order text says "we will refund you" but refunds are by hand (`src/index.js:605`)
 - [ ] Soft-launch plan, then open
 - [ ] Who owns the accounts, who handles support and refunds (client)
 
 ### Quick or hand off (urgent, not important)
 - [ ] Send the client the Launch Checklist (share it from the page)
 - [ ] WhatsApp Business greeting, away message and quick replies on the shop phone (shop staff)
-- [ ] Draft the WhatsApp and SMS wording for client approval (me)
+- [x] Draft the WhatsApp and SMS wording for client approval (me). Done and checked against the code: `docs/MESSAGES_DRAFT.md`. Waiting for client answers to its 9 questions.
 - [ ] Write a refund and receipt-check note (me)
 
 ### Later (not urgent, not important)
