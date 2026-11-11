@@ -17,6 +17,10 @@ Before answering a question about how the project fits together, where something
 
 After you change code, refresh the graph so it stays true: run `graphify update .` (code only, no model calls). If docs or pages changed, run `/graphify --update`. Commit the refreshed `graphify-out/` files with the change.
 
+## To-do board
+
+When the user returns or asks what is next, read `BOARD.md` first: it has where we stopped, what is waiting on the client, what needs a decision, and what is ready to do. Keep it current as items are done.
+
 ## Project basics
 
 - Cloudflare Worker (`src/index.js`, plain JavaScript) with a D1 database; static pages in `public/`.
