@@ -2,7 +2,8 @@
 
 Paused on 2026-11-11. Read this first when you return, then ask what to pick up.
 
-Client requirements list (shareable, tick-boxes): https://claude.ai/artifact/57TSt8WwEFEsEyK4yiQAX1
+Client checklist (short, tick-boxes, share this one): https://claude.ai/artifact/JhKxDXfVUk2oR46QRVA4vq
+Longer written version (older, same content): https://claude.ai/artifact/57TSt8WwEFEsEyK4yiQAX1
 
 ## Where we stopped
 
@@ -20,7 +21,7 @@ Client requirements list (shareable, tick-boxes): https://claude.ai/artifact/57T
 
 ## Waiting on the client
 
-Full detail, with tick-boxes, is in the client requirements list above.
+Same items as the client checklist above; the longer written version has more detail.
 
 - [ ] Till number, store number confirmation, Org Portal username, OTP, business details (section 1)
 - [ ] Safaricom Go Live approval and production passkey, Consumer Key and Secret (section 1)
