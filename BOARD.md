@@ -1,5 +1,6 @@
 # ForTwenty: to-do board
 
+Visual board (tick-boxes, view this first): https://claude.ai/artifact/KzkVxEN7spns3DqckKoNeo
 Paused on 2026-11-11. Read this first when you return, then ask what to pick up.
 
 Client checklist (short, tick-boxes, share this one): https://claude.ai/artifact/JhKxDXfVUk2oR46QRVA4vq
